@@ -283,5 +283,13 @@ def download_tender_docx(filename: str):
 if __name__ == "__main__":
     import uvicorn
     print(f"🚀 Starting Pertamina Tender Generator API on http://{HOST}:{PORT}")
-    uvicorn.run("api.main:app", host=HOST, port=PORT, reload=True)
+    uvicorn.run(
+        "api.main:app",
+        host=HOST,
+        port=PORT,
+        reload=True,
+        reload_dirs=["api", "tools", "rag"],
+        reload_includes=["*.py"],
+        reload_excludes=[".venv", "Frontend", "node_modules", "dist", "output", ".git", "__pycache__"],
+    )
 

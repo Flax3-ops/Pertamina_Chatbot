@@ -65,7 +65,11 @@ export default function ChatPage({ activeThreadId, onThreadChange }) {
 
       setMessages(normaliseMessages(data.messages ?? []))
     } catch (err) {
-      setError(err?.response?.data?.detail ?? err.message ?? 'Terjadi kesalahan.')
+      let errMsg = err?.response?.data?.detail ?? err.message ?? 'Terjadi kesalahan.'
+      if (err.code === 'ECONNABORTED' || (typeof errMsg === 'string' && errMsg.includes('timeout'))) {
+        errMsg = 'Permintaan membutuhkan waktu lebih lama dari batas waktu (timeout). Server sedang memproses tugas berat atau LLM sedang sibuk. Silakan coba kembali.'
+      }
+      setError(errMsg)
       // Remove optimistic human message on failure
       setMessages(prev => prev.slice(0, -1))
     } finally {
