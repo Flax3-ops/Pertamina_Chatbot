@@ -17,8 +17,11 @@ import os
 import uuid
 from typing import Any, Dict, List, Optional
 
+from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+
+load_dotenv()
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -138,10 +141,11 @@ class RenameThreadRequest(BaseModel):
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.post("")
-async def chat(req: ChatRequest):
+def chat(req: ChatRequest):
     """
     Send a user message to the LangGraph agent and return the full updated
     conversation (including tool calls with outputs).
+    Runs synchronously in FastAPI's threadpool to avoid blocking the event loop.
     """
     from langchain_core.messages import HumanMessage
 
