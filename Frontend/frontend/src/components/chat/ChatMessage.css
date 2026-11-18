@@ -195,3 +195,127 @@
 .tool-card-code.output {
   color: var(--text-secondary);
 }
+
+/* ── Dedicated File Download Cards ── */
+.chat-file-cards-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.chat-file-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(135deg, #0e2344 0%, #11284d 100%);
+  border: 1px solid rgba(74, 144, 217, 0.45);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  transition: transform var(--transition), border-color var(--transition);
+}
+
+.chat-file-card:hover {
+  border-color: var(--accent-blue);
+  transform: translateY(-1px);
+}
+
+.chat-file-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  background: rgba(74, 144, 217, 0.2);
+  color: var(--accent-blue-light);
+  flex-shrink: 0;
+}
+
+.chat-file-icon.pdf {
+  background: rgba(239, 83, 80, 0.2);
+  color: #ef5350;
+}
+
+.file-badge {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  font-size: 8px;
+  font-weight: 700;
+  padding: 1px 3px;
+  border-radius: 3px;
+  background: var(--accent-blue);
+  color: white;
+  line-height: 1;
+}
+
+.chat-file-icon.pdf .file-badge {
+  background: #ef5350;
+}
+
+.chat-file-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chat-file-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-file-sub {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.chat-file-download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--accent-blue);
+  color: white !important;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 12px;
+  border-radius: var(--radius-sm);
+  text-decoration: none !important;
+  flex-shrink: 0;
+  transition: background var(--transition), transform var(--transition);
+}
+
+.chat-file-download-btn:hover {
+  background: var(--accent-blue-light);
+  transform: scale(1.04);
+}
+
+/* ── Inline Download Link inside Markdown ── */
+.inline-download-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(74, 144, 217, 0.18);
+  border: 1px solid rgba(74, 144, 217, 0.45);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  color: var(--accent-blue-light) !important;
+  font-weight: 500;
+  text-decoration: none !important;
+  margin: 4px 0;
+  transition: background var(--transition), border-color var(--transition);
+}
+
+.inline-download-link:hover {
+  background: rgba(74, 144, 217, 0.35);
+  border-color: var(--accent-blue);
+  color: white !important;
+}

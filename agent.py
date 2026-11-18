@@ -123,14 +123,16 @@ def convert_pdf_to_docx(state: Annotated[dict, InjectedState], target_pdf_name: 
         final_title = rks_data.get("cover_page", {}).get("judul_pekerjaan", doc_title)
         num_babs = len(rks_data.get("bab", []))
 
-        return (
-            f"Successfully converted document to DOCX format!\n"
-            f"- Title: {final_title}\n"
-            f"- Structured Chapters: {num_babs} BAB\n"
-            f"- Converted Word Document: {filename}\n"
-            f"- Path: {output_path}\n"
-            f"The document includes official Pertamina cover page, lembar pengesahan, daftar isi, and structured chapters."
-        )
+        download_url = f"/api/download/{filename}"
+        return json.dumps({
+            "status": "success",
+            "message": "Dokumen berhasil dikonversi ke format Word (.docx) resmi Pertamina.",
+            "title": final_title,
+            "filename": filename,
+            "chapters_count": num_babs,
+            "download_url": download_url,
+            "path": output_path
+        }, ensure_ascii=False)
     except Exception as e:
         return f"Failed to convert document to DOCX: {str(e)}"
 
@@ -179,7 +181,13 @@ Gunakan tools yang tersedia sesuai aturan ketat berikut:
 2. Objektif dan Terstruktur:
    - Gunakan penomoran atau poin-poin yang terstruktur rapi untuk penjelasan pasal atau klausul teknis.
    - Jangan berasumsi atau mengarang regulasi jika informasi tidak ditemukan di dokumen resmi.
-3. Penutupan Proaktif (Call to Action):
+3. Tautan Unduhan Dokumen Wajib:
+   - Saat memanggil `convert_pdf_to_docx`, Anda WAJIB menyertakan tautan download markdown aktif menggunakan path download_url yang dikembalikan tool:
+     `[📥 Unduh <filename>](/api/download/<filename>)`
+   - Saat memanggil `create_rks_document`, Anda WAJIB menyertakan tautan download dokumen Word dan pratinjau:
+     `[📥 Unduh Dokumen RKS (.docx)](/api/rks/<artifact_id>/document.docx)`
+     `[👁️ Pratinjau Dokumen PDF](/api/rks/<artifact_id>/preview.pdf)`
+4. Penutupan Proaktif (Call to Action):
    - Di setiap akhir respon, berikan kalimat penutup yang menawarkan langkah logis berikutnya secara ramah (misalnya: penawaran konversi ke format .docx, bedah pasal tertentu, atau penyusunan lampiran teknis).
 </response_guidelines>
 
@@ -219,11 +227,12 @@ Draf di atas telah disusun sesuai format standar. Apakah draf ini sudah sesuai d
 
 ### CONTOH 3: Permintaan Konversi File
 User: "Tolong ubah dokumen RKS tadi ke format Word biar bisa saya edit."
-Action: Panggil tool `convert_pdf_to_docx(document_id="...")`
+Action: Panggil tool `convert_pdf_to_docx(target_pdf_name="...")`
 Response:
-"Dokumen RKS pengadaan jasa katering telah berhasil dikonversi ke format Microsoft Word (.docx) resmi.
+"Dokumen RKS pengadaan jasa katering telah berhasil dikonversi ke format Microsoft Word (.docx) resmi Pertamina.
 
-Unduh file Anda di sini: [RKS_Pengadaan_Jasa_Katering_Rev01.docx]
+Silakan unduh berkas Anda melalui tautan berikut:
+[📥 Unduh RKS_Pengadaan_Jasa_Katering_Rev01.docx](/api/download/RKS_Pengadaan_Jasa_Katering_Rev01.docx)
 
 Apakah ada lampiran spesifikasi teknis atau rincian HPS yang perlu kita lengkapi ke dalam dokumen tersebut selanjutnya?"
 </few_shot_examples>

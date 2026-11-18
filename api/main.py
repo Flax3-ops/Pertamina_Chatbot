@@ -280,6 +280,34 @@ def download_tender_docx(filename: str):
     )
 
 
+@app.get("/api/download/{filename}")
+def download_file(filename: str):
+    """
+    General file download endpoint for any converted or generated DOCX/PDF files.
+    """
+    safe_filename = os.path.basename(filename)
+    file_path = OUTPUT_DIR / safe_filename
+
+    if not file_path.exists():
+        # Search output directory recursively
+        candidates = list(OUTPUT_DIR.glob(f"**/{safe_filename}"))
+        if candidates:
+            file_path = candidates[0]
+        else:
+            raise HTTPException(status_code=404, detail=f"File {safe_filename} tidak ditemukan.")
+
+    media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    if safe_filename.lower().endswith(".pdf"):
+        media_type = "application/pdf"
+
+    return FileResponse(
+        path=str(file_path),
+        filename=safe_filename,
+        media_type=media_type,
+        content_disposition_type="attachment",
+    )
+
+
 if __name__ == "__main__":
     import uvicorn
     print(f"🚀 Starting Pertamina Tender Generator API on http://{HOST}:{PORT}")
