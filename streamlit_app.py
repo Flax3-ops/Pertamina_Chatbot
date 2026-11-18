@@ -6,12 +6,14 @@ import ast
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any, List
+from textwrap import dedent
 import streamlit as st
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, SystemMessage
 from agent import app, tools
 from tools.docx_exporter import parse_text_to_rks_data, render_to_docx
 import psycopg
 from tools.pdf_converter import find_matching_pdf, convert_pdf_to_docx_layout, get_pdf_metadata, DATA_DIR
+from rag.conversation_store import ConversationStore
 
 # ---------------------------------------------------------------------------
 # Page Configuration & Professional Theming
@@ -23,8 +25,8 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-st.markdown(
-    """
+st.html(
+    dedent("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
 
@@ -268,29 +270,120 @@ st.markdown(
     div[data-testid="stChatInput"] {
         border-radius: 16px !important;
     }
+
+    /* Sidebar conversation rows & hover delete button */
+    section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] {
+        position: relative;
+        align-items: center !important;
+        margin-bottom: 2px !important;
+    }
+
+    section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] div[data-testid="column"]:first-child button {
+        text-align: left !important;
+        justify-content: flex-start !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] div[data-testid="column"]:first-child button p {
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+    }
+
+    section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] div[data-testid="column"]:last-child {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] div[data-testid="column"]:last-child button {
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.2s ease, visibility 0.2s ease, background-color 0.15s ease, color 0.15s ease;
+        border: none !important;
+        background: transparent !important;
+        color: #94A3B8 !important;
+        font-size: 0.95rem !important;
+        font-weight: 700 !important;
+        padding: 0 !important;
+        min-height: 38px !important;
+        height: 38px !important;
+        border-radius: 6px !important;
+    }
+
+    section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"]:hover div[data-testid="column"]:last-child button,
+    section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] div[data-testid="column"]:last-child button:focus {
+        opacity: 1;
+        visibility: visible;
+    }
+
+    section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] div[data-testid="column"]:last-child button:hover {
+        color: #ED1C24 !important;
+        background-color: #FEE2E2 !important;
+    }
     </style>
-    """,
-    unsafe_allow_html=True,
+    """),
 )
 
 # ---------------------------------------------------------------------------
 # Session State Initialization
 # ---------------------------------------------------------------------------
+CHAT_IDENTITY_MODE = "single"  # Ganti ke "multi" untuk identitas per pengguna; token URL bukan pengganti login pada akses publik.
+if CHAT_IDENTITY_MODE == "single":
+    owner_token = "local_single_user"
+    if "chat_owner" in st.query_params:
+        del st.query_params["chat_owner"]
+else:
+    owner_token = st.query_params.get("chat_owner", "")
+    if not re.fullmatch(r"[0-9a-f]{32}", owner_token):
+        owner_token = uuid.uuid4().hex
+        st.query_params["chat_owner"] = owner_token
+if st.session_state.get("_chat_owner_token") not in (None, owner_token):
+    for key in ("threads", "current_thread_id", "_chat_store_synced_owner",
+                "_chat_migrated_threads"):
+        st.session_state.pop(key, None)
+st.session_state["_chat_owner_token"] = owner_token
+
+try:
+    chat_store = ConversationStore(owner_token, single_user=CHAT_IDENTITY_MODE == "single")
+    chat_store.initialize()
+except Exception as exc:
+    chat_store = None
+    st.warning(f"Riwayat percakapan belum terhubung ke PostgreSQL: {exc}")
+
+
 def init_session_state():
     if "threads" not in st.session_state:
-        initial_thread_id = f"thread_{str(uuid.uuid4())[:8]}"
-        st.session_state.threads = {
-            initial_thread_id: {
-                "id": initial_thread_id,
-                "title": "Chat 1",
-                "created_at": datetime.now().strftime("%H:%M"),
-                "tool_history": [],
+        saved_threads = chat_store.list_threads() if chat_store else []
+        if saved_threads:
+            st.session_state.threads = {item["id"]: item for item in saved_threads}
+            requested = st.query_params.get("chat_thread", "")
+            st.session_state.current_thread_id = (
+                requested if requested in st.session_state.threads else saved_threads[0]["id"]
+            )
+        else:
+            initial_thread_id = f"thread_{uuid.uuid4().hex}"
+            st.session_state.threads = {
+                initial_thread_id: {
+                    "id": initial_thread_id,
+                    "title": "Chat 1",
+                    "created_at": datetime.now().strftime("%H:%M"),
+                    "tool_history": [],
+                }
             }
-        }
-        st.session_state.current_thread_id = initial_thread_id
+            st.session_state.current_thread_id = initial_thread_id
+            if chat_store:
+                chat_store.create_thread(initial_thread_id, "Chat 1")
+        st.query_params["chat_thread"] = st.session_state.current_thread_id
 
     if "current_thread_id" not in st.session_state:
         st.session_state.current_thread_id = list(st.session_state.threads.keys())[0]
+
+    if chat_store and st.session_state.get("_chat_store_synced_owner") != owner_token:
+        for thread in st.session_state.threads.values():
+            chat_store.ensure_thread(thread["id"], thread["title"])
+        st.session_state["_chat_store_synced_owner"] = owner_token
 
     if "active_tool_now" not in st.session_state:
         st.session_state.active_tool_now = None
@@ -299,7 +392,7 @@ def init_session_state():
         st.session_state.prefilled_prompt = None
 
     if "show_split_viewer" not in st.session_state:
-        st.session_state.show_split_viewer = True
+        st.session_state.show_split_viewer = False
 
     if "dialog_converted_file" not in st.session_state:
         st.session_state.dialog_converted_file = None
@@ -317,8 +410,10 @@ current_thread = st.session_state.threads[current_thread_id]
 # Helper Functions
 # ---------------------------------------------------------------------------
 def create_new_thread():
-    new_id = f"thread_{str(uuid.uuid4())[:8]}"
+    new_id = f"thread_{uuid.uuid4().hex}"
     chat_idx = len(st.session_state.threads) + 1
+    if chat_store:
+        chat_store.create_thread(new_id, f"Chat {chat_idx}")
     st.session_state.threads[new_id] = {
         "id": new_id,
         "title": f"Chat {chat_idx}",
@@ -326,19 +421,62 @@ def create_new_thread():
         "tool_history": [],
     }
     st.session_state.current_thread_id = new_id
+    st.query_params["chat_thread"] = new_id
     st.session_state.active_tool_now = None
 
 
+def delete_thread_by_id(thread_id: str):
+    """Delete a thread from database and session state."""
+    if chat_store:
+        try:
+            chat_store.delete_thread(thread_id)
+        except Exception as e:
+            logger.warning(f"Error deleting thread {thread_id} from DB: {e}")
+    if thread_id in st.session_state.threads:
+        del st.session_state.threads[thread_id]
+
+    if len(st.session_state.threads) == 0:
+        create_new_thread()
+    elif st.session_state.current_thread_id == thread_id:
+        st.session_state.current_thread_id = list(st.session_state.threads.keys())[0]
+        st.query_params["chat_thread"] = st.session_state.current_thread_id
+        st.session_state.active_tool_now = None
+
+
 def get_thread_messages(thread_id: str):
-    """Retrieves conversation messages stored in LangGraph's MemorySaver for this thread."""
+    """Restore persisted messages to LangGraph when its in-memory state is empty."""
     try:
         config = {"configurable": {"thread_id": thread_id}}
         state = app.get_state(config)
-        if state and state.values:
-            return state.values.get("messages", [])
+        messages = state.values.get("messages", []) if state and state.values else []
+        if messages and chat_store:
+            migrated = st.session_state.setdefault("_chat_migrated_threads", set())
+            if thread_id not in migrated:
+                try:
+                    if not chat_store.load_messages(thread_id):
+                        chat_store.save_messages(thread_id, messages)
+                    migrated.add(thread_id)
+                except Exception as exc:
+                    st.warning(f"Riwayat percakapan belum tersimpan: {exc}")
+        elif chat_store:
+            messages = chat_store.load_messages(thread_id)
+            if messages:
+                app.update_state(config, {"messages": messages}, as_node="agent")
+        return messages
     except Exception as e:
         st.error(f"Error fetching state for thread {thread_id}: {e}")
     return []
+
+
+def persist_thread_messages(thread_id: str):
+    if not chat_store:
+        return
+    try:
+        state = app.get_state({"configurable": {"thread_id": thread_id}})
+        if state and state.values:
+            chat_store.save_messages(thread_id, state.values.get("messages", []))
+    except Exception as exc:
+        st.error(f"Percakapan belum tersimpan ke database: {exc}")
 
 
 def extract_docx_path(text: str) -> Optional[str]:
@@ -362,59 +500,21 @@ def extract_docx_path(text: str) -> Optional[str]:
 
 
 def get_current_thread_document(thread_id: str) -> Optional[Dict[str, Any]]:
-    """Retrieves the latest document fetched by fetch_full_documents or generated in this thread along with its title and original PDF path."""
-    messages = get_thread_messages(thread_id)
-    for msg in reversed(messages):
-        # 1. Check ToolMessage from fetch_full_documents / return_full_docs
-        if isinstance(msg, ToolMessage) and getattr(msg, "name", None) in ("fetch_full_documents", "return_full_docs", "fetch_full_document"):
-            content = msg.content
-            doc_str = ""
-            doc_title = ""
-            source_file = ""
-
-            if isinstance(content, dict):
-                doc_str = content.get("full_docs", "")
-                doc_title = content.get("title", "")
-                source_file = content.get("source_file", "")
-            elif isinstance(content, str):
-                if "'full_docs':" in content or '"full_docs":' in content:
-                    try:
-                        parsed_dict = ast.literal_eval(content)
-                        if isinstance(parsed_dict, dict):
-                            doc_str = parsed_dict.get("full_docs", "")
-                            doc_title = parsed_dict.get("title", "")
-                            source_file = parsed_dict.get("source_file", "")
-                    except Exception:
-                        pass
-                if not doc_str:
-                    doc_str = content
-
-            if doc_str and len(doc_str.strip()) > 20:
-                clean_title = doc_title or source_file or "Fetched RKS Document"
-                pdf_path = find_matching_pdf(clean_title)
-                return {
-                    "source": "fetch_full_documents",
-                    "content": doc_str,
-                    "title": clean_title,
-                    "source_file": source_file,
-                    "pdf_path": pdf_path,
-                }
-
-        # 2. Check AIMessage containing substantial RKS structure
-        if isinstance(msg, AIMessage) and msg.content and ("BAB 1" in msg.content or "RENCANA KERJA" in msg.content):
-            if len(msg.content.strip()) > 100:
-                return {
-                    "source": "generated_rks",
-                    "content": msg.content,
-                    "title": "Generated RKS Draft",
-                    "source_file": "",
-                    "pdf_path": None,
-                }
-    return None
+    return select_chat_document(get_thread_messages(thread_id))
 
 
 def format_tool_output_display(tc_name: str, raw_content: Any) -> Any:
     """Nicely formats and displays RAG and Conversion tool outputs."""
+    if tc_name == "create_rks_document":
+        try:
+            artifact = json.loads(raw_content) if isinstance(raw_content, str) else raw_content
+            st.write(f"Status RKS: {artifact.get('status', 'belum tersedia')}")
+            if artifact.get("source"):
+                st.caption(artifact["source"]["filename"])
+            st.caption("Halaman hasil dan unduhan tersedia pada panel Pratinjau halaman.")
+        except (ValueError, TypeError):
+            st.text(str(raw_content))
+        return
     content = raw_content
     if isinstance(content, str):
         if content.startswith("{") or content.startswith("["):
@@ -425,7 +525,7 @@ def format_tool_output_display(tc_name: str, raw_content: Any) -> Any:
 
     if tc_name == "fetch_full_documents" and isinstance(content, dict):
         title = content.get("title", "Untitled Document")
-        st.markdown(f"<div class='doc-title-badge'>📄 Document Title: <strong>{title}</strong></div>", unsafe_allow_html=True)
+        st.html(f"<div class='doc-title-badge'>📄 Document Title: <strong>{title}</strong></div>")
         full_text = content.get("full_docs", "")
         st.caption(f"Fetched full content ({len(full_text)} characters). Preview below:")
         st.text(full_text[:500] + ("..." if len(full_text) > 500 else ""))
@@ -438,7 +538,7 @@ def format_tool_output_display(tc_name: str, raw_content: Any) -> Any:
                 t = item.get("title") or item.get("document_title", "Unknown Document")
                 score = item.get("relevance_score") or item.get("score", "N/A")
                 snippet = str(item.get("content", ""))[:200]
-                st.markdown(f"{idx}. <span class='doc-title-badge'>📄 {t}</span> <span style='font-size:0.75rem; color:#64748B;'>Score: {score}</span>", unsafe_allow_html=True)
+                st.html(f"{idx}. <span class='doc-title-badge'>📄 {t}</span> <span style='font-size:0.75rem; color:#64748B;'>Score: {score}</span>")
                 st.caption(f"> {snippet}...")
         return
 
@@ -457,7 +557,7 @@ def render_docx_download_card(file_path: str, key: str):
         with open(file_path, "rb") as f:
             data = f.read()
 
-        st.markdown(
+        st.html(
             f"""
             <div class="download-card">
                 <div class="download-info">
@@ -466,7 +566,6 @@ def render_docx_download_card(file_path: str, key: str):
                 </div>
             </div>
             """,
-            unsafe_allow_html=True,
         )
         st.download_button(
             label=f"📥 Download {fname}",
@@ -551,6 +650,23 @@ def open_pdf_converter_dialog(doc_title: str, doc_content: str = "", pdf_path: s
             )
 
 
+@st.dialog("Konfirmasi Hapus Percakapan")
+def confirm_delete_thread_dialog(thread_id: str, thread_title: str):
+    """Popup modal dialog to confirm chat thread deletion."""
+    st.markdown("Apakah Anda yakin ingin menghapus percakapan berikut?")
+    st.markdown(f"#### 💬 **{thread_title}**")
+    st.caption("⚠️ Riwayat chat dalam percakapan ini akan dihapus secara permanen.")
+    st.write("")
+    col_cancel, col_del = st.columns([1, 1])
+    with col_cancel:
+        if st.button("Batal", key=f"cancel_del_{thread_id}", use_container_width=True):
+            st.rerun()
+    with col_del:
+        if st.button("🗑️ Hapus", type="primary", key=f"confirm_del_{thread_id}", use_container_width=True):
+            delete_thread_by_id(thread_id)
+            st.rerun()
+
+
 AVATAR_ASSISTANT = "assets/logo_pertamina.png" if os.path.exists("assets/logo_pertamina.png") else "🤖"
 AVATAR_USER = "👤"
 
@@ -558,6 +674,13 @@ AVATAR_USER = "👤"
 # ---------------------------------------------------------------------------
 # Sidebar: ChatGPT-like History & Tools Monitor
 # ---------------------------------------------------------------------------
+def _close_rks_pages():
+    st.session_state["show_rks_page"] = False
+    st.session_state["show_rks_library"] = False
+    st.session_state["show_contract_library"] = False
+    st.session_state["show_amendment_library"] = False
+
+
 with st.sidebar:
     if os.path.exists("assets/logo_pertamina.png"):
         st.image("assets/logo_pertamina.png", width=160)
@@ -567,12 +690,65 @@ with st.sidebar:
     st.caption("AI Document & Knowledge Assistant")
     st.write("")
 
+    # Navigation Switcher
+    if st.button("Pembuatan RKS dan preview", key="open_rks_page", use_container_width=True):
+        st.session_state["show_rks_page"] = True
+        st.session_state["show_rks_library"] = False
+        st.session_state["show_contract_library"] = False
+        st.session_state["show_amendment_library"] = False
+    if st.button("Gudang RKS", key="open_rks_library", use_container_width=True):
+        st.session_state["show_rks_library"] = True
+        st.session_state["show_rks_page"] = False
+        st.session_state["show_contract_library"] = False
+        st.session_state["show_amendment_library"] = False
+    if st.button("Gudang Rancangan Kontrak", key="open_contract_library", use_container_width=True):
+        st.session_state["show_contract_library"] = True
+        st.session_state["show_rks_page"] = False
+        st.session_state["show_rks_library"] = False
+        st.session_state["show_amendment_library"] = False
+    if st.button("Gudang Dokumen Amandemen", key="open_amendment_library", use_container_width=True):
+        st.session_state["show_amendment_library"] = True
+        st.session_state["show_rks_page"] = False
+        st.session_state["show_rks_library"] = False
+        st.session_state["show_contract_library"] = False
+    if st.session_state.get("show_rks_page") and st.button("Kembali ke chat / generator", key="close_rks_page"):
+        st.session_state["show_rks_page"] = False
+    if st.session_state.get("show_rks_library") and st.button("Kembali ke chat / generator", key="close_rks_library"):
+        st.session_state["show_rks_library"] = False
+    if st.session_state.get("show_contract_library") and st.button("Kembali ke chat / generator", key="close_contract_library"):
+        st.session_state["show_contract_library"] = False
+    if st.session_state.get("show_amendment_library") and st.button("Kembali ke chat / generator", key="close_amendment_library"):
+        st.session_state["show_amendment_library"] = False
+
+    nav_index = 0
+    if st.session_state.get("nav_choice") == "tender":
+        nav_index = 1
+    elif st.session_state.get("nav_choice") == "amendment":
+        nav_index = 2
+
+    nav_selection = st.radio(
+        "Menu Navigasi",
+        ["💬 Chatbot & RKS Viewer", "📑 Dokumen Tender Generator", "📝 Dokumen Amendemen Generator"],
+        index=nav_index,
+        key="app_nav_radio_menu",
+        label_visibility="collapsed",
+        on_change=_close_rks_pages,
+    )
+    if "Amendemen" in nav_selection:
+        st.session_state.nav_choice = "amendment"
+    elif "Tender" in nav_selection:
+        st.session_state.nav_choice = "tender"
+    else:
+        st.session_state.nav_choice = "chat"
+
+    st.write("")
+
     if st.button("➕ New Chat", key="btn_create_new_thread", use_container_width=True, type="primary"):
         create_new_thread()
         st.rerun()
 
     st.write("")
-    st.markdown("<p style='font-size:0.75rem; font-weight:700; color:#64748B; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;'>Recent Conversations</p>", unsafe_allow_html=True)
+    st.html("<p style='font-size:0.75rem; font-weight:700; color:#64748B; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;'>Recent Conversations</p>")
 
     thread_keys = list(st.session_state.threads.keys())
     for t_id in thread_keys:
@@ -580,32 +756,52 @@ with st.sidebar:
         is_active = (t_id == current_thread_id)
 
         button_label = f"{'🔹 ' if is_active else '💬 '}{thread_info['title']}"
-        if st.button(
-            button_label,
-            key=f"thread_select_btn_{t_id}",
-            use_container_width=True,
-            type="primary" if is_active else "secondary",
-        ):
-            st.session_state.current_thread_id = t_id
-            st.rerun()
+        col_thread, col_del = st.columns([5.3, 1.1], gap="small", vertical_alignment="center")
+        with col_thread:
+            if st.button(
+                button_label,
+                key=f"thread_select_btn_{t_id}",
+                use_container_width=True,
+                type="primary" if is_active else "secondary",
+            ):
+                st.session_state.current_thread_id = t_id
+                st.query_params["chat_thread"] = t_id
+                st.rerun()
+        with col_del:
+            if st.button("✕", key=f"btn_del_thread_{t_id}", help="Hapus percakapan", use_container_width=True):
+                confirm_delete_thread_dialog(t_id, thread_info["title"])
 
     st.write("")
     st.divider()
 
-    # Active Thread Settings
-    with st.expander("⚙️ Current Session Settings", expanded=False):
-        st.text(f"Thread: {current_thread_id}")
-        new_title = st.text_input("Rename Session", value=current_thread["title"], key="rename_title_input")
-        if st.button("Save Name", key="btn_save_thread_name", use_container_width=True):
-            if new_title.strip():
-                st.session_state.threads[current_thread_id]["title"] = new_title.strip()
-                st.rerun()
+    # Outer tag details: Pengaturan Tambahan containing individual expandable elements
+    with st.expander("Pengaturan Tambahan", expanded=False):
+        # 1. Current Session Settings Element
+        with st.expander("⚙️ Current Session Settings", expanded=False):
+            st.text(f"Thread: {current_thread_id}")
+            new_title = st.text_input("Rename Session", value=current_thread["title"], key="rename_title_input")
+            if st.button("Save Name", key="btn_save_thread_name", use_container_width=True):
+                if new_title.strip():
+                    if chat_store:
+                        chat_store.rename_thread(current_thread_id, new_title.strip())
+                    st.session_state.threads[current_thread_id]["title"] = new_title.strip()
+                    st.rerun()
 
-        if len(st.session_state.threads) > 1:
             if st.button("🗑️ Delete Session", key="btn_delete_current_thread", use_container_width=True):
-                del st.session_state.threads[current_thread_id]
-                st.session_state.current_thread_id = list(st.session_state.threads.keys())[0]
-                st.rerun()
+                confirm_delete_thread_dialog(current_thread_id, current_thread["title"])
+
+        # 2. Agent Capabilities Element
+        with st.expander("⚡ Agent Capabilities", expanded=False):
+            if st.session_state.active_tool_now:
+                st.html(
+                    f"<div style='padding:6px 10px; background:#EFF6FF; border:1px solid #BFDBFE; border-radius:6px; font-size:0.8rem; color:#0072CE; font-weight:600; margin-bottom:8px;'>"
+                    f"⚡ Running: <code>{st.session_state.active_tool_now}</code></div>",
+                )
+            else:
+                st.html(
+                    "<div style='padding:6px 10px; background:#F8FAFC; border:1px solid #E2E8F0; border-radius:6px; font-size:0.8rem; color:#475569; font-weight:600; margin-bottom:8px;'>"
+                    "🟢 Agent Status: Ready</div>",
+                )
 
     # Database PDF Converter Shortcut in Sidebar
     all_repo_pdfs = list(DATA_DIR.glob("*.pdf")) if DATA_DIR.exists() else []
@@ -633,40 +829,77 @@ with st.sidebar:
             unsafe_allow_html=True,
         )
 
-    with st.expander("🔧 Available Agent Tools", expanded=False):
-        for t in tools:
-            t_name = getattr(t, "name", str(t))
-            t_desc = getattr(t, "description", "")
-            is_convert = "convert" in t_name or "docx" in t_name
-            badge_class = "tool-badge-red" if is_convert else "tool-badge-blue"
-            st.markdown(
-                f"<div style='margin-bottom:6px;'>"
-                f"<span class='{badge_class}'>● {t_name}</span><br>"
-                f"<span style='font-size:0.75rem; color:#64748B;'>{t_desc.strip().splitlines()[0][:70]}</span>"
-                f"</div>",
-                unsafe_allow_html=True,
-            )
+        # 3. Database PDF Converter Shortcut Element
+        all_repo_pdfs = list(DATA_DIR.glob("*.pdf")) if DATA_DIR.exists() else []
+        if all_repo_pdfs:
+            with st.expander("🔄 Convert Any Repository PDF", expanded=False):
+                st.caption("Select any PDF from the repository database to convert via popup dialog:")
+                pdf_options = {p.name: str(p.resolve()) for p in all_repo_pdfs}
+                selected_pdf_name = st.selectbox("Choose PDF", list(pdf_options.keys()), key="sidebar_pdf_selector")
+                if st.button("Open Conversion Popup", key="btn_open_sidebar_dialog", use_container_width=True):
+                    open_pdf_converter_dialog(pdf_options[selected_pdf_name], selected_pdf_name)
 
-    # Exported Documents in ./output/
-    output_dir = Path("./output")
-    if output_dir.exists():
-        docx_files = sorted(list(output_dir.glob("*.docx")), key=os.path.getmtime, reverse=True)
-        if docx_files:
-            with st.expander(f"📁 Converted Documents ({len(docx_files)})", expanded=True):
-                for f_idx, docx_file in enumerate(docx_files[:4]):
-                    f_name = docx_file.name
-                    f_size = docx_file.stat().st_size / 1024
-                    st.markdown(f"<span style='font-size:0.82rem; font-weight:600;'>📄 {f_name[:24]}...</span> <span style='font-size:0.75rem; color:#64748B;'>({f_size:.1f} KB)</span>", unsafe_allow_html=True)
-                    with open(docx_file, "rb") as df:
-                        st.download_button(
-                            label="⬇️ Download",
-                            data=df.read(),
-                            file_name=f_name,
-                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                            key=f"sidebar_dl_{f_idx}_{f_name}",
-                            use_container_width=True,
-                        )
+        # 4. Converted Documents Element
+        output_dir = Path("./output")
+        if output_dir.exists():
+            docx_files = sorted(list(output_dir.glob("*.docx")), key=os.path.getmtime, reverse=True)
+            if docx_files:
+                with st.expander(f"📁 Converted Documents ({len(docx_files)})", expanded=False):
+                    for f_idx, docx_file in enumerate(docx_files[:4]):
+                        f_name = docx_file.name
+                        f_size = docx_file.stat().st_size / 1024
+                        st.html(f"<span style='font-size:0.82rem; font-weight:600;'>📄 {f_name[:24]}...</span> <span style='font-size:0.75rem; color:#64748B;'>({f_size:.1f} KB)</span>")
+                        with open(docx_file, "rb") as df:
+                            st.download_button(
+                                label="⬇️ Download",
+                                data=df.read(),
+                                file_name=f_name,
+                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                key=f"sidebar_dl_{f_idx}_{f_name}",
+                                use_container_width=True,
+                            )
 
+        # 5. Google Drive Knowledge Base Integration Element
+        with st.expander("☁️ Integrasi Google Drive (RKS Knowledge Base)", expanded=False):
+            render_gdrive_settings_section()
+
+
+# ---------------------------------------------------------------------------
+# Navigation Dispatcher: Tender Generator vs Chatbot & RKS Viewer
+# ---------------------------------------------------------------------------
+if st.session_state.get("show_rks_page"):
+    render_rks_page()
+    st.stop()
+
+if st.session_state.get("show_rks_library"):
+    render_rks_library()
+    st.stop()
+
+if st.session_state.get("show_contract_library"):
+    render_contract_library()
+    st.stop()
+
+if st.session_state.get("show_amendment_library"):
+    render_amendment_library()
+    st.stop()
+
+if st.session_state.get("nav_choice") == "amendment":
+    render_amendment_generator_page()
+    st.stop()
+
+if st.session_state.get("nav_choice") == "tender":
+    render_tender_generator_page(render_docx_download_card, chat_store=chat_store,
+                                 thread_id=current_thread_id)
+    st.stop()
+
+if app is None:
+    st.error(
+        "Chatbot belum dapat dimulai karena konfigurasi atau dependensinya belum lengkap. "
+        "Periksa OPENROUTER_API_KEY pada file .env di direktori proyek."
+    )
+    with st.expander("Detail error"):
+        st.code(AGENT_IMPORT_ERROR or "Unknown agent initialization error")
+    st.stop()
 
 # ---------------------------------------------------------------------------
 # Main Header & Split-Screen View Controls
@@ -676,14 +909,13 @@ current_doc_data = get_current_thread_document(current_thread_id)
 
 top_col1, top_col2, top_col3 = st.columns([3, 1, 1])
 with top_col1:
-    st.markdown(
+    st.html(
         f"""
         <div class="brand-title">
             <span class="brand-accent-blue">Pertamina</span> <span class="brand-accent-red">Knowledge</span> Assistant
             <span class="thread-pill">💬 {current_thread['title']}</span>
         </div>
         """,
-        unsafe_allow_html=True,
     )
 with top_col2:
     # Popup Button in Topbar when an RKS document is loaded
@@ -713,7 +945,7 @@ else:
 with chat_col:
     # Empty State Hero
     if len(thread_messages) == 0:
-        st.markdown(
+        st.html(
             """
             <div class="hero-container">
                 <div style="display:inline-block; padding:8px 12px; border-radius:50%; background:#F1F5F9; margin-bottom:8px;">
@@ -725,7 +957,6 @@ with chat_col:
                 </div>
             </div>
             """,
-            unsafe_allow_html=True,
         )
 
         col1, col2, col3 = st.columns(3)
@@ -779,7 +1010,7 @@ with chat_col:
 
                     with st.chat_message("assistant", avatar=AVATAR_ASSISTANT):
                         with st.status(f"⚙️ Tool: {tc_name}", state="complete", expanded=False):
-                            st.markdown(f"<span class='{badge_type}'>Invoked: {tc_name}</span>", unsafe_allow_html=True)
+                            st.html(f"<span class='{badge_type}'>Invoked: {tc_name}</span>")
                             st.write("**Inputs:**")
                             st.json(tc_args)
                             if matching_tool_msg:
@@ -798,6 +1029,7 @@ with chat_col:
                     f_cand = extract_docx_path(msg.content)
                     if f_cand:
                         detected_file_path = f_cand
+                        st.session_state["last_exported_docx"] = f_cand
 
             # Render download card if docx was produced
             if detected_file_path:
@@ -817,18 +1049,17 @@ with chat_col:
 # ===========================================================================
 if doc_col:
     with doc_col:
-        st.markdown(
+        st.html(
             """
             <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
                 <span style="font-weight:700; font-size:1.1rem; color:#0F172A;">📄 Document Viewer</span>
                 <span style="font-size:0.75rem; color:#64748B; font-weight:600;">LIVE PREVIEW</span>
             </div>
             """,
-            unsafe_allow_html=True,
         )
 
         if not current_doc_data:
-            st.markdown(
+            st.html(
                 """
                 <div class="doc-empty-state">
                     <span style="font-size:2.4rem;">📑</span>
@@ -838,7 +1069,6 @@ if doc_col:
                     </p>
                 </div>
                 """,
-                unsafe_allow_html=True,
             )
         else:
             doc_raw = current_doc_data["content"]
@@ -853,7 +1083,7 @@ if doc_col:
             babs = parsed_rks.get("bab", [])
 
             # Paper Card Container showing explicit document title
-            st.markdown(
+            st.html(
                 f"""
                 <div class="doc-viewer-container">
                     <div class="doc-top-stripe"></div>
@@ -861,27 +1091,25 @@ if doc_col:
                         <div class="doc-paper-title">📄 {display_title}</div>
                         <div style="margin-top:6px;">
                             <span class="doc-metadata-pill">📁 File: {source_file or display_title}</span>
-                            <span class="doc-metadata-csms">CSMS: {doc_csms}</span>
-                            <span class="doc-metadata-pill">{len(babs)} Bab</span>
+                            <span class="doc-metadata-csms">Draf referensi</span>
+                            <span class="doc-metadata-pill">Pratinjau DOCX</span>
                         </div>
                     </div>
                 </div>
                 """,
-                unsafe_allow_html=True,
             )
 
             # Document Viewer Tabs
-            tab_preview, tab_outline, tab_convert = st.tabs(["📖 Document Text", "📑 Chapter Outline", "⚡ Convert PDF to DOCX"])
+            tab_preview, tab_source, tab_outline, tab_convert = st.tabs(["Pratinjau halaman", "Teks sumber", "Daftar bab", "Konversi PDF asli"])
 
             with tab_preview:
-                st.markdown(
-                    f"""
-                    <div class="doc-paper-body">
-                    """,
-                    unsafe_allow_html=True,
-                )
-                st.markdown(doc_raw)
-                st.markdown("</div>", unsafe_allow_html=True)
+                render_chat_preview(current_doc_data, current_thread_id)
+
+            with tab_source:
+                if doc_raw:
+                    st.markdown(doc_raw)
+                else:
+                    st.caption("Isi dokumen ditampilkan pada tab Pratinjau halaman dari hasil DOCX.")
 
             with tab_outline:
                 if babs:
@@ -948,6 +1176,8 @@ if user_prompt:
 
     if current_thread["title"].startswith("Chat ") and len(thread_messages) == 0:
         suggested_title = user_prompt.strip()[:24] + ("..." if len(user_prompt.strip()) > 24 else "")
+        if chat_store:
+            chat_store.rename_thread(current_thread_id, suggested_title)
         st.session_state.threads[current_thread_id]["title"] = suggested_title
 
     config = {"configurable": {"thread_id": current_thread_id}}
@@ -958,6 +1188,7 @@ if user_prompt:
             response_placeholder = st.empty()
             final_answer = ""
             generated_docx_path = None
+            stream_completed = False
 
             try:
                 for event in app.stream(input_state, config=config, stream_mode="updates"):
@@ -997,6 +1228,8 @@ if user_prompt:
                         tool_msgs = tool_output.get("messages", [])
                         for tm in tool_msgs:
                             tm_content = tm.content
+                            if tm.name == "create_rks_document":
+                                st.info("Hasil RKS akan ditampilkan pada panel Pratinjau halaman setelah proses selesai.")
                             if tm.name == "fetch_full_documents" and isinstance(tm_content, dict):
                                 fetched_title = tm_content.get("title", "Untitled Document")
                                 st.success(f"📄 **Document Fetched:** `{fetched_title}`")
@@ -1013,12 +1246,14 @@ if user_prompt:
                             f_cand = extract_docx_path(str(tm_content))
                             if f_cand:
                                 generated_docx_path = f_cand
+                                st.session_state["last_exported_docx"] = f_cand
 
                             history = st.session_state.threads[current_thread_id]["tool_history"]
                             if history:
                                 history[-1]["result_preview"] = str(tm_content)[:250]
                                 history[-1]["status"] = "completed"
 
+                stream_completed = True
                 st.session_state.active_tool_now = None
 
                 if final_answer:
@@ -1030,5 +1265,8 @@ if user_prompt:
             except Exception as e:
                 st.session_state.active_tool_now = None
                 st.error(f"Error while executing agent: {str(e)}")
+            finally:
+                if stream_completed:
+                    persist_thread_messages(current_thread_id)
 
     st.rerun()
