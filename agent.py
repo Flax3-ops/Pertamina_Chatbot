@@ -12,11 +12,14 @@ import config
 from dotenv import load_dotenv
 import os
 import re
+import json
 from langchain_tavily import TavilySearch
 from langchain_core.tools import tool
 from rag.vector_store import fetch_full_document, fetch_relevant_documents
 from langgraph.prebuilt import ToolNode, tools_condition, InjectedState
 from tools.docx_exporter import parse_text_to_rks_data, render_to_docx
+from tools.rks.service import create_document
+from tools.amendment.tool import GenerateAmendmentDocumentTool
 import psycopg
 
 load_dotenv()
@@ -83,7 +86,15 @@ def convert_pdf_to_docx(state: Annotated[dict, InjectedState], target_pdf_name: 
     # 2. If target_pdf_name is provided or doc_content is empty, query PostgreSQL
     if not doc_content and target_pdf_name:
         try:
-            with psycopg.connect("dbname=langchain user=langchain password=langchain host=127.0.0.1 connect_timeout=5") as conn:
+            db_url = os.getenv("DATABASE_URL")
+            conn_args = {"conninfo": db_url} if db_url else {
+                "host": os.getenv("PGVECTOR_HOST", "127.0.0.1"),
+                "port": int(os.getenv("PGVECTOR_PORT", "5432")),
+                "dbname": os.getenv("PGVECTOR_DB", "langchain"),
+                "user": os.getenv("PGVECTOR_USER", "langchain"),
+                "password": os.getenv("PGVECTOR_PASSWORD", "langchain"),
+            }
+            with psycopg.connect(**conn_args, connect_timeout=5) as conn:
                 with conn.cursor() as cur:
                     cur.execute(
                         "SELECT title, full_content FROM documents WHERE title ILIKE %s LIMIT 1;",
