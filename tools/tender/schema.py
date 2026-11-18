@@ -6,10 +6,6 @@ which are then passed into the pure python-docx renderer.
 
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
-from .placeholders import (
-    NOMOR_TENDER, TANGGAL_DOKUMEN, METODE_PEMENUHAN, JENIS_KONTRAK,
-    HPS_PRIME_COST, HPS_TOTAL,
-)
 
 # ──────────────────────────────────────────────────────────────
 # Pydantic Models for Dokumen Tender
@@ -17,8 +13,8 @@ from .placeholders import (
 
 class PejabatProcurement(BaseModel):
     jabatan_1: str = "Wkl. Fungsi Procurement (Pengadaan)"
-    jabatan_2: str = "[Jabatan Pejabat Procurement]"
-    nama: str = "[Nama Pejabat Procurement]"
+    jabatan_2: str = "Area Manager Procurement Kalimantan"
+    nama: str = "Rigga Widar Atmagi"
 
 class UnitRegional(BaseModel):
     nama_entitas: str = "PT PERTAMINA PATRA NIAGA REGIONAL KALIMANTAN"
@@ -29,8 +25,8 @@ class UnitRegional(BaseModel):
 
 class CoverPageData(BaseModel):
     nama_pengadaan: str
-    nomor_tender: str = NOMOR_TENDER
-    tanggal: str = TANGGAL_DOKUMEN
+    nomor_tender: str = "No.Project/DT/PND970000/2026-S7"
+    tanggal: str = "04 Desember 2025"
     pejabat_procurement: PejabatProcurement = Field(default_factory=PejabatProcurement)
     unit_regional: UnitRegional = Field(default_factory=UnitRegional)
 
@@ -40,10 +36,10 @@ class KBUPEntry(BaseModel):
     deskripsi: str
 
 class JadwalPreBid(BaseModel):
-    mekanisme: str = ""
-    hari_tanggal: str = ""
-    waktu: str = ""
-    tempat: str = ""
+    mekanisme: str = "Online"
+    hari_tanggal: str = "Senin, 08 Desember 2025"
+    waktu: str = "10.00 WITA"
+    tempat: str = "Microsoft Teams Meeting dengan link yang disampaikan melalui email Undangan Prebid Meeting"
     catatan: List[str] = [
         "Undangan disampaikan pada SAPP-SmartGEP",
         "Jumlah maksimal perwakilan dari Peserta yang dapat mengikuti Pre-Bid Meeting adalah 5 (lima) orang dan yang dapat mengikuti Penjelasan Lokasi Pekerjaan adalah 3 (tiga) orang.",
@@ -51,11 +47,11 @@ class JadwalPreBid(BaseModel):
     ]
 
 class JadwalPemasukan(BaseModel):
-    mulai_hari_tanggal: str = ""
-    mulai_waktu: str = ""
-    selesai_hari_tanggal: str = ""
-    selesai_waktu: str = ""
-    tempat_portal: str = ""
+    mulai_hari_tanggal: str = "Senin, 08 Desember 2025"
+    mulai_waktu: str = "09.00 WITA"
+    selesai_hari_tanggal: str = "Senin, 15 Desember 2025"
+    selesai_waktu: str = "16.00 WITA"
+    tempat_portal: str = "https://smart.gep.com"
     catatan: List[str] = [
         "Tata waktu untuk setiap Pemilihan Penyedia yang belum tercantum pada tabel di atas dapat dilihat pada SAPP-Smart GEP.",
         "Tata waktu dan tahapan Pemilihan Penyedia dapat disesuaikan dengan kebutuhan Pertamina dan dituangkan dalam Berita Acara Pre-Bid Meeting dan/atau kesepakatan dalam discussion forum SAPP-SmartGEP dan/atau perubahan Milestone SAPP-Smart GEP."
@@ -68,10 +64,10 @@ class KomponenBarangTKDN(BaseModel):
     persen_tkdn: str
 
 class HPSOEInfo(BaseModel):
-    prime_cost: Optional[float] = None
-    prime_cost_str: str = HPS_PRIME_COST
-    total_dengan_kr: Optional[float] = None
-    total_dengan_kr_str: str = HPS_TOTAL
+    prime_cost: float = 0.0
+    prime_cost_str: str = "Rp0,00"
+    total_dengan_kr: float = 0.0
+    total_dengan_kr_str: str = "Rp0,00"
 
 class LampiranChecklist(BaseModel):
     no: str
@@ -89,9 +85,9 @@ class KetentuanKhususIKPP(BaseModel):
         "kualifikasi_minimal": "Tinggi"
     }
     syarat_kbup_kbli: List[KBUPEntry] = []
-    metode_pemenuhan: str = METODE_PEMENUHAN
-    pejabat_berwenang: str = "[Nama/Jabatan Pejabat Berwenang]"
-    pengawas_pekerjaan: str = "[Nama/Jabatan Pengawas Pekerjaan]"
+    metode_pemenuhan: str = "Tender Terbatas"
+    pejabat_berwenang: str = "Sr. Manager Opt. & Maint. Regional Kalimantan"
+    pengawas_pekerjaan: str = "Region Manager RPD Regional Kalimantan"
     jadwal_prebid: JadwalPreBid = Field(default_factory=JadwalPreBid)
     jadwal_pemasukan: JadwalPemasukan = Field(default_factory=JadwalPemasukan)
     masa_berlaku_penawaran: str = "Penawaran berlaku selama 90 (sembilan puluh) Hari Kalender sejak Pembukaan Dokumen Penawaran"
@@ -125,7 +121,7 @@ class KetentuanKhususIKPP(BaseModel):
         "komponen_barang": [],
         "preferensi_harga": "Diberikan preferensi harga sesuai ketentuan yang berlaku."
     }
-    jenis_kontrak: str = JENIS_KONTRAK
+    jenis_kontrak: str = "Gabungan Harga Satuan & Lumpsum"
     jumlah_pemenang: str = "Single Winner"
     hps_oe: HPSOEInfo = Field(default_factory=HPSOEInfo)
     tata_cara_evaluasi_komersial: str = "Metode evaluasi penawaran komersial Item harga satuan & item harga lumpsum dievaluasi secara Total"
@@ -159,7 +155,7 @@ class Lampiran2AItem(BaseModel):
 
 class RancanganKontrakData(BaseModel):
     judul_pekerjaan: str
-    nomor_kontrak: str = "[Nomor kontrak belum diisi]"
+    nomor_kontrak: str = "KTR-[KODE]-[TAHUN]"
     durasi_pekerjaan_hari: int = 180
     masa_pemeliharaan_hari: int = 90
     sistem_pembayaran: str = "Milestone / Monthly Progress"
@@ -182,11 +178,11 @@ DOKUMEN_TENDER_JSON_SCHEMA = """
 {
   "cover_page": {
     "nama_pengadaan": "<string: Judul Pengadaan Lengkap>",
-    "nomor_tender": "<string: nomor dari parameter atau [Nomor tender belum diisi]>",
-    "tanggal": "<string: tanggal dari parameter atau [Tanggal dokumen belum diisi]>",
+    "nomor_tender": "<string: e.g. No.Project/DT/PND970000/2026-S7>",
+    "tanggal": "<string: e.g. 04 Desember 2025>",
     "pejabat_procurement": {
       "jabatan_1": "Wkl. Fungsi Procurement (Pengadaan)",
-      "jabatan_2": "<string: Jabatan Pejabat Procurement dari parameter atau placeholder>",
+      "jabatan_2": "<string: e.g. Area Manager Procurement Kalimantan>",
       "nama": "<string: Nama Pejabat Procurement>"
     },
     "unit_regional": {
@@ -214,9 +210,9 @@ DOKUMEN_TENDER_JSON_SCHEMA = """
         "deskripsi": "<string: e.g. Konstruksi Perpipaan Minyak, Gas, dan Energi termasuk perawatannya>"
       }
     ],
-    "metode_pemenuhan": "<nilai dari parameter atau [Metode pemenuhan belum diisi]>",
-    "pejabat_berwenang": "<string: Nama/Jabatan Pejabat Berwenang dari parameter atau placeholder>",
-    "pengawas_pekerjaan": "<string: Nama/Jabatan Pengawas Pekerjaan dari parameter atau placeholder>",
+    "metode_pemenuhan": "<Tender Terbatas|Tender Terbuka|Pemilihan Langsung>",
+    "pejabat_berwenang": "<string: e.g. Sr. Manager Opt. & Maint. Regional Kalimantan>",
+    "pengawas_pekerjaan": "<string: e.g. Region Manager RPD Regional Kalimantan>",
     "jadwal_prebid": {
       "mekanisme": "Online",
       "hari_tanggal": "<string: Hari, DD Bulan YYYY>",
@@ -262,13 +258,13 @@ DOKUMEN_TENDER_JSON_SCHEMA = """
       ],
       "preferensi_harga": "Diberikan preferensi harga sesuai ketentuan yang berlaku."
     },
-    "jenis_kontrak": "<nilai dari parameter atau [Jenis kontrak belum diisi]>",
+    "jenis_kontrak": "Gabungan Harga Satuan & Lumpsum",
     "jumlah_pemenang": "Single Winner",
     "hps_oe": {
-      "prime_cost": null,
-      "prime_cost_str": "[HPS Prime Cost belum diisi]",
-      "total_dengan_kr": null,
-      "total_dengan_kr_str": "[Total HPS belum diisi]"
+      "prime_cost": 13283434534,
+      "prime_cost_str": "Rp13.283.434.534,00",
+      "total_dengan_kr": 14346100000,
+      "total_dengan_kr_str": "Rp14.346.100.000,00"
     },
     "tata_cara_evaluasi_komersial": "Metode evaluasi penawaran komersial Item harga satuan & item harga lumpsum dievaluasi secara Total",
     "mekanisme_koreksi_aritmatika": "Mekanisme 1",
@@ -310,7 +306,7 @@ DOKUMEN_TENDER_JSON_SCHEMA = """
   ],
   "rancangan_kontrak": {
     "judul_pekerjaan": "<string: Judul Pekerjaan untuk Kontrak>",
-    "nomor_kontrak": "[Nomor kontrak belum diisi]",
+    "nomor_kontrak": "<string: e.g. KTR-042/PND970000/2026-S7>",
     "durasi_pekerjaan_hari": 180,
     "masa_pemeliharaan_hari": 90,
     "sistem_pembayaran": "Pembayaran berdasarkan pencapaian progres fisik (Milestone / Monthly Progress) sesuai Berita Acara Progres Fisik yang disetujui Pengawas Pekerjaan.",
