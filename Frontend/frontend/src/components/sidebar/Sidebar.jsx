@@ -12,6 +12,7 @@ import {
   Loader2,
   AlertCircle,
   Pencil,
+  Database,
 } from 'lucide-react'
 import './Sidebar.css'
 
@@ -19,6 +20,7 @@ const NAV_ITEMS = [
   { path: '/generate-rks', label: 'Generate RKS', icon: FileText },
   { path: '/generate-tender', label: 'Generate Tender', icon: ClipboardList },
   { path: '/generate-amandemen', label: 'Generate Amandemen', icon: FilePen },
+  { path: '/knowledge-base', label: 'Knowledge Base', icon: Database },
 ]
 
 export default function Sidebar({

@@ -5,6 +5,7 @@ import ChatPage from './pages/ChatPage'
 import TenderPage from './pages/TenderPage'
 import RKSPage from './pages/RKSPage'
 import AmandemenPage from './pages/AmandemenPage'
+import KnowledgeBasePage from './pages/KnowledgeBasePage'
 import { chatService } from './services/api'
 import './App.css'
 
@@ -101,6 +102,7 @@ export default function App() {
               path="/generate-amandemen"
               element={<AmandemenPage onSelectThread={handleSelectThread} />}
             />
+            <Route path="/knowledge-base" element={<KnowledgeBasePage />} />
           </Routes>
         </main>
       </div>

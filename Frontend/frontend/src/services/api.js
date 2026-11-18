@@ -79,6 +79,16 @@ export const rksService = {
   downloadUrl: (artifactId) => `/api/rks/${encodeURIComponent(artifactId)}/document.docx`,
 }
 
+// ── Google Drive & Knowledge Base ─────────────────────────────────────────────
+
+export const gdriveService = {
+  getStatus: () => api.get('/gdrive/status').then(r => r.data),
+  saveConfig: (payload) => api.post('/gdrive/config', payload).then(r => r.data),
+  sync: (payload = {}) => api.post('/gdrive/sync', payload).then(r => r.data),
+  getFiles: () => api.get('/gdrive/files').then(r => r.data),
+  disconnect: () => api.post('/gdrive/disconnect').then(r => r.data),
+}
+
 // ── Health ───────────────────────────────────────────────────────────────────
 
 export const healthCheck = () =>
