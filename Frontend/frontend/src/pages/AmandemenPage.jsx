@@ -1,9 +1,11 @@
 import React, { useState } from 'react'
-import { FilePen, AlertCircle, CheckCircle, Download, Loader2 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { FilePen, AlertCircle, CheckCircle, Loader2, ArrowRight } from 'lucide-react'
 import api from '../services/api'
 import './FormPage.css'
 
-export default function AmandemenPage() {
+export default function AmandemenPage({ onSelectThread }) {
+  const navigate = useNavigate()
   const [form, setForm] = useState({
     contract_id: '',
     amendment_description: '',
@@ -27,12 +29,22 @@ export default function AmandemenPage() {
         thread_id: null,
         message: `Generate dokumen amandemen kontrak dengan detail berikut:\n- ID Kontrak: ${form.contract_id}\n- Nomor Amandemen: ${form.amendment_number}\n- Tanggal: ${form.amendment_date}\n- Deskripsi Perubahan: ${form.amendment_description}`,
       })
-      setResult({ message: 'Permintaan amandemen telah dikirim ke asisten. Lihat hasil di halaman Chat.', thread_id: data?.thread_id })
+      setResult({
+        message: 'Permintaan amandemen telah berhasil diproses oleh asisten AI.',
+        thread_id: data?.thread_id,
+      })
     } catch (err) {
-      setError(err?.response?.data?.detail || err.message)
+      setError(err?.response?.data?.detail || err.message || 'Gagal mengajukan dokumen amandemen.')
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleGoToChat = () => {
+    if (result?.thread_id && onSelectThread) {
+      onSelectThread(result.thread_id)
+    }
+    navigate('/')
   }
 
   return (
@@ -103,7 +115,7 @@ export default function AmandemenPage() {
 
         <button type="submit" className="primary-btn" disabled={!form.contract_id || !form.amendment_description || loading}>
           {loading
-            ? <><Loader2 size={15} className="spin" /> Membuat Amandemen…</>
+            ? <><Loader2 size={15} className="spin" /> Memproses Amandemen…</>
             : '📋 Generate Dokumen Amandemen'}
         </button>
       </form>
@@ -111,11 +123,19 @@ export default function AmandemenPage() {
       {result && (
         <div className="form-card result-card">
           <div className="result-icon"><CheckCircle size={36} /></div>
-          <h2 className="result-title">Permintaan Dikirim!</h2>
+          <h2 className="result-title">Permintaan Berhasil Diproses!</h2>
           <p className="result-message">{result.message}</p>
           <div className="result-actions">
-            <a href="/" className="primary-btn">Lihat di Chat →</a>
-            <button className="secondary-btn" onClick={() => { setResult(null); setForm({ contract_id: '', amendment_description: '', amendment_number: '', amendment_date: '' }) }}>
+            <button className="primary-btn" onClick={handleGoToChat}>
+              Lihat di Chat <ArrowRight size={15} />
+            </button>
+            <button
+              className="secondary-btn"
+              onClick={() => {
+                setResult(null)
+                setForm({ contract_id: '', amendment_description: '', amendment_number: '', amendment_date: '' })
+              }}
+            >
               Buat Amandemen Lain
             </button>
           </div>

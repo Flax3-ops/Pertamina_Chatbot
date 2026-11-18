@@ -124,6 +124,7 @@
 .tool-card-header:hover {
   background: rgba(74, 144, 217, 0.08);
   color: var(--text-primary);
+  transform: none;
 }
 
 .tool-card-left {

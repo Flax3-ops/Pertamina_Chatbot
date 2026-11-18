@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
 import MessageList from '../components/chat/MessageList'
 import ChatInput from '../components/chat/ChatInput'
 import { chatService } from '../services/api'
-import { v4 as uuidv4 } from 'uuid'
 import './ChatPage.css'
 
 /**
@@ -15,12 +13,11 @@ function normaliseMessages(raw = []) {
   return raw.map(msg => {
     const role = msg.role ?? (msg.type === 'human' ? 'human' : 'ai')
     const content = msg.content ?? ''
-    // Tool calls embedded inside AI messages
     const tool_calls = (msg.tool_calls ?? []).map(tc => ({
       name: tc.name ?? tc.tool ?? '',
       input: tc.args ?? tc.input ?? {},
       output: tc.output ?? null,
-      status: tc.output != null ? 'done' : 'running',
+      status: tc.status ?? (tc.output != null ? 'done' : 'running'),
     }))
     return { role, content, tool_calls }
   })
@@ -35,16 +32,22 @@ export default function ChatPage({ activeThreadId, onThreadChange }) {
   useEffect(() => {
     if (!activeThreadId) {
       setMessages([])
+      setError(null)
       return
     }
     setLoading(true)
+    setError(null)
     chatService.getMessages(activeThreadId)
       .then(data => setMessages(normaliseMessages(data.messages ?? [])))
-      .catch(() => setMessages([]))
+      .catch((err) => {
+        setMessages([])
+        setError(err?.response?.data?.detail || 'Gagal memuat pesan percakapan.')
+      })
       .finally(() => setLoading(false))
   }, [activeThreadId])
 
   const sendMessage = useCallback(async (text) => {
+    if (!text || !text.trim() || loading) return
     setError(null)
 
     // Optimistic UI: add human message immediately
@@ -53,10 +56,9 @@ export default function ChatPage({ activeThreadId, onThreadChange }) {
     setLoading(true)
 
     try {
-      // If no active thread, the backend will create one
       const data = await chatService.sendMessage(activeThreadId ?? null, text)
 
-      // Backend returns new thread_id if one was created
+      // Notify parent if a new thread was created
       if (data.thread_id && data.thread_id !== activeThreadId) {
         onThreadChange(data.thread_id)
       }
@@ -64,12 +66,12 @@ export default function ChatPage({ activeThreadId, onThreadChange }) {
       setMessages(normaliseMessages(data.messages ?? []))
     } catch (err) {
       setError(err?.response?.data?.detail ?? err.message ?? 'Terjadi kesalahan.')
-      // Remove optimistic human message on error
+      // Remove optimistic human message on failure
       setMessages(prev => prev.slice(0, -1))
     } finally {
       setLoading(false)
     }
-  }, [activeThreadId, onThreadChange])
+  }, [activeThreadId, loading, onThreadChange])
 
   return (
     <div className="chat-page">
@@ -78,7 +80,11 @@ export default function ChatPage({ activeThreadId, onThreadChange }) {
           ⚠️ {error}
         </div>
       )}
-      <MessageList messages={messages} loading={loading} />
+      <MessageList
+        messages={messages}
+        loading={loading}
+        onSelectSuggestion={sendMessage}
+      />
       <ChatInput onSend={sendMessage} disabled={loading} />
     </div>
   )

@@ -55,31 +55,31 @@ def _get_store() -> "ConversationStore":
 def _serialise_messages(messages) -> List[Dict[str, Any]]:
     """
     Convert LangChain message objects into a JSON-safe list that the React
-    frontend can render.  Tool calls and tool outputs are merged so that each
-    AIMessage carries its tool_calls with their outputs.
+    frontend can render. Tool calls and their outputs are merged into the
+    corresponding AI response bubble. Consecutive AI turns are grouped together.
     """
     from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, SystemMessage
 
-    # Build a tool-output lookup: tool_call_id → content
+    # 1. Build a tool-output lookup: tool_call_id → content
     tool_outputs: Dict[str, str] = {}
     for msg in messages:
         if isinstance(msg, ToolMessage):
             tool_outputs[msg.tool_call_id] = msg.content
 
-    result = []
+    # 2. Extract structured list
+    raw_list: List[Dict[str, Any]] = []
     for msg in messages:
         if isinstance(msg, SystemMessage):
             continue  # skip system prompts
 
         if isinstance(msg, HumanMessage):
-            result.append({
+            raw_list.append({
                 "role": "human",
                 "content": msg.content if isinstance(msg.content, str) else json.dumps(msg.content, ensure_ascii=False),
                 "tool_calls": [],
             })
 
         elif isinstance(msg, AIMessage):
-            # Gather tool calls
             tcs = []
             for tc in (msg.tool_calls or []):
                 tc_id = tc.get("id", "")
@@ -93,18 +93,31 @@ def _serialise_messages(messages) -> List[Dict[str, Any]]:
 
             text_content = msg.content
             if not isinstance(text_content, str):
-                text_content = json.dumps(text_content, ensure_ascii=False)
+                text_content = json.dumps(text_content, ensure_ascii=False) if text_content else ""
 
-            result.append({
+            raw_list.append({
                 "role": "ai",
                 "content": text_content,
                 "tool_calls": tcs,
             })
 
-        elif isinstance(msg, ToolMessage):
-            pass  # already merged into the preceding AIMessage's tool_calls
+    # 3. Merge adjacent AI messages in the same turn (e.g. tool call turn + final response)
+    #    so that tool cards and the text answer appear in one unified AI message bubble.
+    grouped: List[Dict[str, Any]] = []
+    for item in raw_list:
+        if item["role"] == "ai" and grouped and grouped[-1]["role"] == "ai":
+            prev = grouped[-1]
+            prev["tool_calls"].extend(item["tool_calls"])
+            if item["content"]:
+                if prev["content"]:
+                    prev["content"] += "\n\n" + item["content"]
+                else:
+                    prev["content"] = item["content"]
+        else:
+            grouped.append(item)
 
-    return result
+    # Filter out empty AI messages with no content and no tool calls
+    return [m for m in grouped if m["role"] == "human" or m["content"] or m["tool_calls"]]
 
 
 # ── Request/Response models ───────────────────────────────────────────────────
@@ -136,15 +149,11 @@ async def chat(req: ChatRequest):
     store = _get_store()
 
     thread_id = req.thread_id or str(uuid.uuid4())
-    is_new = req.thread_id is None
-
-    # Ensure thread exists in DB
     title = req.message[:60].strip().replace("\n", " ") or "Percakapan Baru"
+
+    # Ensure thread exists in DB without raising duplicate key errors
     try:
-        if is_new:
-            store.create_thread(thread_id, title)
-        else:
-            store.ensure_thread(thread_id, title)
+        store.ensure_thread(thread_id, title)
     except Exception:
         pass
 
@@ -154,17 +163,27 @@ async def chat(req: ChatRequest):
     except Exception:
         history = []
 
-    history.append(HumanMessage(content=req.message))
-
-    # Run agent (LangGraph MemorySaver uses thread_id as config key)
+    user_msg = HumanMessage(content=req.message)
     config = {"configurable": {"thread_id": thread_id}}
+
     try:
-        result = agent.invoke({"messages": history}, config=config)
-        new_messages = result.get("messages", history)
+        # Check if agent memory already holds state for this thread
+        graph_state = agent.get_state(config)
+        existing_in_graph = graph_state.values.get("messages", []) if graph_state else []
+
+        if existing_in_graph:
+            # Memory saver has context, pass only the new user message to prevent duplicates
+            result = agent.invoke({"messages": [user_msg]}, config=config)
+        else:
+            # First turn or server restarted: supply full history + new user message
+            full_input = list(history) + [user_msg]
+            result = agent.invoke({"messages": full_input}, config=config)
+
+        new_messages = result.get("messages", history + [user_msg])
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Agent error: {exc}") from exc
 
-    # Persist to DB
+    # Persist updated history to DB
     try:
         store.save_messages(thread_id, new_messages)
     except Exception:

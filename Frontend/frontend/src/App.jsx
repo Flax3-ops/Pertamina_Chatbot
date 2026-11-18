@@ -8,13 +8,10 @@ import AmandemenPage from './pages/AmandemenPage'
 import { chatService } from './services/api'
 import './App.css'
 
-function generateId() {
-  return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)
-}
-
 export default function App() {
   const [threads, setThreads] = useState([])
   const [activeThreadId, setActiveThreadId] = useState(null)
+  const [chatKey, setChatKey] = useState(0)
   const [threadsLoading, setThreadsLoading] = useState(false)
   const [threadsError, setThreadsError] = useState(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -36,8 +33,10 @@ export default function App() {
 
   useEffect(() => { loadThreads() }, [loadThreads])
 
-  const handleNewChat = useCallback(async () => {
+  // Trigger fresh new chat session
+  const handleNewChat = useCallback(() => {
     setActiveThreadId(null)
+    setChatKey(prev => prev + 1)
   }, [])
 
   const handleSelectThread = useCallback((id) => {
@@ -48,7 +47,10 @@ export default function App() {
     try {
       await chatService.deleteThread(id)
       setThreads(prev => prev.filter(t => t.id !== id))
-      if (activeThreadId === id) setActiveThreadId(null)
+      if (activeThreadId === id) {
+        setActiveThreadId(null)
+        setChatKey(prev => prev + 1)
+      }
     } catch {}
   }, [activeThreadId])
 
@@ -59,10 +61,10 @@ export default function App() {
     } catch {}
   }, [])
 
-  // Called by ChatPage when backend creates a new thread
+  // Called by ChatPage or other pages when backend creates a new thread
   const handleThreadChange = useCallback((newId) => {
     setActiveThreadId(newId)
-    loadThreads() // refresh the sidebar
+    loadThreads() // refresh the sidebar list
   }, [loadThreads])
 
   return (
@@ -87,6 +89,7 @@ export default function App() {
               path="/"
               element={
                 <ChatPage
+                  key={`${activeThreadId || 'new'}-${chatKey}`}
                   activeThreadId={activeThreadId}
                   onThreadChange={handleThreadChange}
                 />
@@ -94,7 +97,10 @@ export default function App() {
             />
             <Route path="/generate-tender" element={<TenderPage />} />
             <Route path="/generate-rks" element={<RKSPage />} />
-            <Route path="/generate-amandemen" element={<AmandemenPage />} />
+            <Route
+              path="/generate-amandemen"
+              element={<AmandemenPage onSelectThread={handleSelectThread} />}
+            />
           </Routes>
         </main>
       </div>

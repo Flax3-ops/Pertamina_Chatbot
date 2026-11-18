@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Upload, FileText, AlertCircle, CheckCircle, Download, Loader2 } from 'lucide-react'
+import { FileText, AlertCircle, CheckCircle, Download, ExternalLink, Loader2 } from 'lucide-react'
 import { rksService } from '../services/api'
 import './FormPage.css'
 
@@ -17,9 +17,13 @@ export default function RKSPage() {
     setLoading(true)
     try {
       const data = await rksService.generate({ query, source_id: sourceId })
-      setResult(data)
+      if (data.status === 'gagal') {
+        setError(data.message || 'Pembuatan RKS gagal diproses.')
+      } else {
+        setResult(data)
+      }
     } catch (err) {
-      setError(err?.response?.data?.detail || err.message)
+      setError(err?.response?.data?.detail || err.message || 'Terjadi kesalahan saat membuat RKS.')
     } finally {
       setLoading(false)
     }
@@ -69,7 +73,7 @@ export default function RKSPage() {
             placeholder="Kosongkan untuk seleksi otomatis"
           />
           <span className="field-hint">
-            Jika Anda tahu ID dokumen referensi tertentu, isi di sini. Jika tidak, sistem akan memilih otomatis.
+            Jika Anda tahu ID dokumen referensi tertentu dari katalog, isi di sini. Jika tidak, sistem akan memilih otomatis.
           </span>
         </div>
 
@@ -80,26 +84,38 @@ export default function RKSPage() {
         </button>
       </form>
 
-      {result && (
+      {result && result.artifact_id && (
         <div className="form-card result-card">
           <div className="result-icon"><CheckCircle size={36} /></div>
-          <h2 className="result-title">RKS Berhasil Dibuat!</h2>
-          {result.filename && <p className="result-filename">{result.filename}</p>}
+          <h2 className="result-title">
+            {result.mode === 'template umum' ? 'Template Umum RKS Berhasil Dibuat' : 'RKS Berhasil Dibuat!'}
+          </h2>
+          <p className="result-filename">ID Dokumen: {result.artifact_id}</p>
           {result.message && <p className="result-message">{result.message}</p>}
-          {result.filename && (
-            <div className="result-actions">
-              <a
-                href={rksService.downloadUrl(result.filename)}
-                download
-                className="primary-btn"
-              >
-                <Download size={15} /> Unduh DOCX
-              </a>
-              <button className="secondary-btn" onClick={() => { setResult(null); setQuery(''); setSourceId('') }}>
-                Buat RKS Lain
-              </button>
-            </div>
-          )}
+
+          <div className="result-actions">
+            <a
+              href={rksService.downloadDocxUrl(result.artifact_id)}
+              download={`RKS-${result.artifact_id.slice(0, 8)}.docx`}
+              className="primary-btn"
+            >
+              <Download size={15} /> Unduh DOCX
+            </a>
+            <a
+              href={rksService.downloadPdfUrl(result.artifact_id)}
+              target="_blank"
+              rel="noreferrer"
+              className="secondary-btn"
+            >
+              <ExternalLink size={15} /> Pratinjau PDF
+            </a>
+            <button
+              className="secondary-btn"
+              onClick={() => { setResult(null); setQuery(''); setSourceId('') }}
+            >
+              Buat RKS Lain
+            </button>
+          </div>
         </div>
       )}
     </div>

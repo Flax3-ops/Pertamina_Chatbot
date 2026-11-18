@@ -11,7 +11,6 @@ import {
   ChevronRight,
   Loader2,
   AlertCircle,
-  MoreHorizontal,
   Pencil,
 } from 'lucide-react'
 import './Sidebar.css'
@@ -39,6 +38,12 @@ export default function Sidebar({
   const [renamingId, setRenamingId] = useState(null)
   const [renameValue, setRenameValue] = useState('')
 
+  const handleNewChatClick = (e) => {
+    e.preventDefault()
+    onNewChat()
+    navigate('/')
+  }
+
   const startRename = (thread, e) => {
     e.stopPropagation()
     setRenamingId(thread.id)
@@ -50,25 +55,31 @@ export default function Sidebar({
     setRenamingId(null)
   }
 
-  const isChat = location.pathname === '/' || location.pathname === '/chat'
-
   return (
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
       {/* Header */}
       <div className="sidebar-header">
         {!collapsed && (
-          <div className="sidebar-brand">
+          <div className="sidebar-brand" onClick={() => navigate('/')} style={{ cursor: 'pointer' }}>
             <span className="brand-logo">⚡</span>
             <span className="brand-name">Pertamina AI</span>
           </div>
         )}
-        <button className="collapse-btn" onClick={onToggleCollapse} title={collapsed ? 'Buka sidebar' : 'Tutup sidebar'}>
+        <button
+          className="collapse-btn"
+          onClick={onToggleCollapse}
+          title={collapsed ? 'Buka sidebar' : 'Tutup sidebar'}
+        >
           {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
         </button>
       </div>
 
       {/* New Chat */}
-      <button className={`new-chat-btn ${collapsed ? 'icon-only' : ''}`} onClick={onNewChat}>
+      <button
+        className={`new-chat-btn ${collapsed ? 'icon-only' : ''}`}
+        onClick={handleNewChatClick}
+        title="Percakapan Baru"
+      >
         <Plus size={16} />
         {!collapsed && <span>Percakapan Baru</span>}
       </button>

@@ -58,6 +58,7 @@
 .collapse-btn:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
+  transform: none;
 }
 
 /* New chat button */
@@ -122,6 +123,7 @@
 .nav-item:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
+  transform: none;
 }
 .nav-item.active {
   background: var(--accent-blue-dim);

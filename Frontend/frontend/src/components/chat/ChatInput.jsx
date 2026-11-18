@@ -1,11 +1,19 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Send, Paperclip } from 'lucide-react'
+import { Send } from 'lucide-react'
 import './ChatInput.css'
 
 export default function ChatInput({ onSend, disabled }) {
   const [value, setValue] = useState('')
   const textareaRef = useRef(null)
 
+  // Focus textarea when component mounts and when disabled becomes false
+  useEffect(() => {
+    if (!disabled && textareaRef.current) {
+      textareaRef.current.focus()
+    }
+  }, [disabled])
+
+  // Auto-resize textarea height
   useEffect(() => {
     const ta = textareaRef.current
     if (!ta) return
@@ -18,6 +26,9 @@ export default function ChatInput({ onSend, disabled }) {
     if (!msg || disabled) return
     onSend(msg)
     setValue('')
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto'
+    }
   }
 
   const handleKeyDown = (e) => {

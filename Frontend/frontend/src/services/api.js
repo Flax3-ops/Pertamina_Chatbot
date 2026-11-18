@@ -10,7 +10,7 @@ const api = axios.create({
 export const chatService = {
   /**
    * Kirim pesan ke agent dan dapatkan respons lengkap (non-streaming).
-   * @param {string} threadId
+   * @param {string|null} threadId
    * @param {string} message
    * @returns {Promise<{messages: Array, thread_id: string}>}
    */
@@ -62,7 +62,7 @@ export const tenderService = {
   generate: (payload) =>
     api.post('/tender/generate', payload).then(r => r.data),
 
-  downloadUrl: (filename) => `/api/tender/download/${filename}`,
+  downloadUrl: (filename) => `/api/tender/download/${encodeURIComponent(filename)}`,
 }
 
 // ── RKS ──────────────────────────────────────────────────────────────────────
@@ -72,9 +72,11 @@ export const rksService = {
     api.post('/rks/generate', payload).then(r => r.data),
 
   list: () =>
-    api.get('/rks/list').then(r => r.data),
+    api.get('/rks/generated').then(r => r.data),
 
-  downloadUrl: (filename) => `/api/rks/download/${filename}`,
+  downloadDocxUrl: (artifactId) => `/api/rks/${encodeURIComponent(artifactId)}/document.docx`,
+  downloadPdfUrl: (artifactId) => `/api/rks/${encodeURIComponent(artifactId)}/preview.pdf`,
+  downloadUrl: (artifactId) => `/api/rks/${encodeURIComponent(artifactId)}/document.docx`,
 }
 
 // ── Health ───────────────────────────────────────────────────────────────────

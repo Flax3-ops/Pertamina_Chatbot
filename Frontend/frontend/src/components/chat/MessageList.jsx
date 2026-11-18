@@ -2,7 +2,7 @@ import React, { useRef, useEffect } from 'react'
 import ChatMessage, { TypingIndicator } from './ChatMessage'
 import './MessageList.css'
 
-export default function MessageList({ messages, loading }) {
+export default function MessageList({ messages, loading, onSelectSuggestion }) {
   const bottomRef = useRef(null)
 
   useEffect(() => {
@@ -24,7 +24,14 @@ export default function MessageList({ messages, loading }) {
             'Jelaskan ketentuan TKDN dalam pedoman pengadaan',
             'Generate dokumen amandemen kontrak',
           ].map((s, i) => (
-            <div key={i} className="suggestion-chip">{s}</div>
+            <div
+              key={i}
+              className="suggestion-chip"
+              onClick={() => onSelectSuggestion && onSelectSuggestion(s)}
+              title="Klik untuk menanyakan langsung"
+            >
+              {s}
+            </div>
           ))}
         </div>
       </div>

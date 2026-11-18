@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Upload, FileText, AlertCircle, CheckCircle, Download, Loader2, ChevronDown } from 'lucide-react'
+import { Upload, FileText, ClipboardList, AlertCircle, CheckCircle, Download, Loader2 } from 'lucide-react'
 import { tenderService } from '../services/api'
 import './FormPage.css'
 
@@ -42,6 +42,11 @@ export default function TenderPage() {
     pemasukan_mulai: '',
     pemasukan_selesai: '',
     output_filename: '',
+    // Extracted metadata passed along to backend generator
+    context_summary: '',
+    boq_items: null,
+    officials: null,
+    rks_artifact_id: null,
   })
 
   const setField = (key, val) => setForm(f => ({ ...f, [key]: val }))
@@ -60,10 +65,14 @@ export default function TenderPage() {
         resiko_csms: data.resiko_csms || f.resiko_csms,
         prime_cost: data.prime_cost != null ? String(data.prime_cost) : f.prime_cost,
         total_dengan_kr: data.total_dengan_kr != null ? String(data.total_dengan_kr) : f.total_dengan_kr,
+        context_summary: data.combined_context_summary || f.context_summary,
+        boq_items: data.boq_items?.length ? data.boq_items : f.boq_items,
+        officials: data.officials || f.officials,
+        rks_artifact_id: data.rks_artifact_id || f.rks_artifact_id,
       }))
       setStep(2)
     } catch (e) {
-      setError(e?.response?.data?.detail || e.message)
+      setError(e?.response?.data?.detail || e.message || 'Gagal mengekstrak konteks dari dokumen.')
     } finally {
       setExtracting(false)
     }
@@ -84,7 +93,7 @@ export default function TenderPage() {
       setResult(data)
       setStep(3)
     } catch (e) {
-      setError(e?.response?.data?.detail || e.message)
+      setError(e?.response?.data?.detail || e.message || 'Gagal menghasilkan Dokumen Tender.')
     } finally {
       setGenerating(false)
     }
@@ -93,7 +102,9 @@ export default function TenderPage() {
   return (
     <div className="form-page">
       <div className="form-page-header">
-        <ClipboardListIcon />
+        <div className="page-icon-wrap">
+          <ClipboardList size={22} />
+        </div>
         <div>
           <h1 className="form-page-title">Generate Dokumen Tender</h1>
           <p className="form-page-subtitle">Unggah RKS & BOQ untuk membuat Dokumen Tender Pertamina secara otomatis</p>
@@ -237,14 +248,6 @@ export default function TenderPage() {
           </div>
         </div>
       )}
-    </div>
-  )
-}
-
-function ClipboardListIcon() {
-  return (
-    <div className="page-icon-wrap">
-      <FileText size={22} />
     </div>
   )
 }
