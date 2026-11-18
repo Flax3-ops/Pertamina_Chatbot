@@ -22,6 +22,7 @@ from tools.tender.docx import OUTPUT_DIR
 from tools.tender.docx import render_contract_to_docx_bytes
 from tools.tender.contract_archive import ContractArchive
 from api.rks import router as rks_router
+from api.chat import router as chat_router
 
 load_dotenv()
 
@@ -34,6 +35,7 @@ app = FastAPI(
     version="1.0.0",
 )
 app.include_router(rks_router)
+app.include_router(chat_router)
 
 # Enable CORS for Streamlit / Frontend access
 app.add_middleware(
