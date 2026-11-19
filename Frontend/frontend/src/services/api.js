@@ -126,6 +126,16 @@ export const gdriveService = {
   disconnect: () => api.post('/gdrive/disconnect').then(r => r.data),
 }
 
+// ── Amandemen Kontrak ─────────────────────────────────────────────────────────
+
+export const amendmentService = {
+  listContracts: () => api.get('/amendment/contracts').then(r => r.data),
+  getContractContext: (contractId) => api.get(`/amendment/contract-context/${encodeURIComponent(contractId)}`).then(r => r.data),
+  generate: (payload) => api.post('/amendment/generate', payload).then(r => r.data),
+  downloadUrl: (filename) => apiUrl(`/api/amendment/download/${encodeURIComponent(filename)}`),
+  listHistory: () => api.get('/amendment/list').then(r => r.data),
+}
+
 // ── Health ───────────────────────────────────────────────────────────────────
 
 export const healthCheck = () =>

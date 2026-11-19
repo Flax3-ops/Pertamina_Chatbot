@@ -99,4 +99,17 @@ def extract_context_from_contract(contract_record: Dict[str, Any]) -> Dict[str, 
             f"Notulen Rapat No.NR-950/PND95C000/2025-S5 tanggal 18 November 2025 perihal Pembahasan Pengajuan Amendemen Pekerjaan {project_name};",
             "Berita Acara Klarifikasi dan Negosiasi Amendemen Waktu dan Biaya No.951/PND95C000/2025-S5 tanggal 02 Desember 2025."
         ],
+        "mpp_hari": 839,
+        "mpl_hari": 749,
+        "mpa_hari": 90,
+        "mpl_tanggal": "01 April 2026",
+        "mpa_tanggal": "30 Juni 2026",
+        "durasi_kontrak_hari": 180,
+        "tanggal_akhir_kontrak": "25 Juni 2027",
+        "dokumen_pengadaan": [
+            f"s. Surat KONTRAKTOR kepada PERUSAHAAN No.10150.S/DPPU-IKN/PGAS/XI/2025 tanggal 21 November 2025 perihal Revisi Penawaran Harga dan Waktu pada {project_name};",
+            f"t. Notulen Rapat No.NR-794/PND95C000/2025-S5 tanggal 13 Oktober 2025 perihal War Room dan Pembahasan Pengajuan Amendemen Pekerjaan {project_name};",
+            f"u. Notulen Rapat No.NR-950/PND95C000/2025-S5 tanggal 18 November 2025 perihal Pembahasan Pengajuan Amendemen Pekerjaan {project_name};",
+            "v. Berita Acara Klarifikasi dan Negosiasi Amendemen Waktu dan Biaya No.951/PND95C000/2025-S5 tanggal 02 Desember 2025."
+        ],
     }

@@ -24,6 +24,7 @@ from tools.tender.contract_archive import ContractArchive
 from api.rks import router as rks_router
 from api.chat import router as chat_router
 from api.gdrive import router as gdrive_router
+from api.amendment import router as amendment_router
 
 load_dotenv()
 
@@ -44,6 +45,7 @@ app = FastAPI(
 app.include_router(rks_router)
 app.include_router(chat_router)
 app.include_router(gdrive_router)
+app.include_router(amendment_router)
 
 # Enable CORS for Streamlit / Frontend access
 app.add_middleware(

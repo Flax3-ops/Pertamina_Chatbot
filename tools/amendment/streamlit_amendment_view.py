@@ -79,21 +79,20 @@ def render_amendment_generator_page() -> None:
     try:
         available_contracts = contract_archive.list()
     except Exception as exc:
-        st.error(f"Gagal mengakses database kontrak: {exc}")
-        return
+        available_contracts = []
 
-    if not available_contracts:
-        st.warning("⚠️ Belum ada rancangan kontrak yang tersimpan di Gudang Kontrak. Buat dan simpan rancangan kontrak terlebih dahulu.")
-        return
-
-    # 1. Pilih Kontrak
+    # 1. Pilih Kontrak Acuan (Menyertakan Template Standar Resmi IKN)
     st.markdown("##### 1. Pilih Kontrak Acuan")
     contract_options = {
-        c["id"]: f"{c['project_name'][:65]}... (ID: {c['id'][:8]})"
-        if len(c["project_name"]) > 65
-        else f"{c['project_name']} (ID: {c['id'][:8]})"
-        for c in available_contracts
+        "template_ikn": "⭐ Template Acuan Resmi: Pembangunan DPPU Nusantara IKN (SP-068/PND900000/2024-S0)"
     }
+    for c in available_contracts:
+        label = f"{c['project_name'][:60]}... (ID: {c['id'][:8]})" if len(c["project_name"]) > 60 else f"{c['project_name']} (ID: {c['id'][:8]})"
+        contract_options[c["id"]] = label
+
+    if not available_contracts:
+        st.info("ℹ️ Belum ada draft kontrak tambahan di Gudang Kontrak. Sistem otomatis menggunakan Template Acuan Resmi (DPPU Nusantara IKN) untuk pengujian langsung.")
+
     selected_contract_id = st.selectbox(
         "Pilih Kontrak Induk",
         options=list(contract_options.keys()),
@@ -102,11 +101,19 @@ def render_amendment_generator_page() -> None:
     )
 
     # Load contract details
-    try:
-        contract_data = contract_archive.get(selected_contract_id)
-    except Exception as e:
-        st.error(f"Gagal memuat data kontrak: {e}")
-        return
+    if selected_contract_id == "template_ikn":
+        contract_data = {
+            "id": "template_ikn",
+            "project_name": "Pembangunan DPPU Nusantara Ibu Kota Negara (IKN) – Penajam Paser Utara",
+            "contract_ref": "SP-068/PND900000/2024-S0",
+            "docx": b"",
+        }
+    else:
+        try:
+            contract_data = contract_archive.get(selected_contract_id)
+        except Exception as e:
+            st.error(f"Gagal memuat data kontrak: {e}")
+            return
 
     # Extract initial context
     extracted = extract_context_from_contract(contract_data)
@@ -148,6 +155,19 @@ def render_amendment_generator_page() -> None:
             tanggal_berlaku = st.text_input("Tanggal Mulai Berlaku Amendemen", value=extracted["tanggal_berlaku_amendemen"], key="amend_inp_tgl_berlaku")
 
         st.divider()
+        st.markdown("**Jadwal Pelaksanaan & Lampiran (Lampiran D-II)**")
+        c_time1, c_time2, c_time3 = st.columns(3)
+        with c_time1:
+            mpp_hari = st.number_input("Masa Penyelesaian Pekerjaan (MPP) Hari", value=int(extracted.get("mpp_hari", 839)), step=1, key="amend_inp_mpp_hari")
+            mpl_hari = st.number_input("Masa Penyelesaian Lingkup (MPL) Hari", value=int(extracted.get("mpl_hari", 749)), step=1, key="amend_inp_mpl_hari")
+        with c_time2:
+            mpa_hari = st.number_input("Masa Penyelesaian Adm (MPA) Hari", value=int(extracted.get("mpa_hari", 90)), step=1, key="amend_inp_mpa_hari")
+            mpl_tanggal = st.text_input("Target Selesai MPL", value=extracted.get("mpl_tanggal", "01 April 2026"), key="amend_inp_mpl_tgl")
+        with c_time3:
+            mpa_tanggal = st.text_input("Target Selesai MPA", value=extracted.get("mpa_tanggal", "30 Juni 2026"), key="amend_inp_mpa_tgl")
+            tanggal_akhir_kontrak = st.text_input("Tanggal Berakhir Kontrak", value=extracted.get("tanggal_akhir_kontrak", "25 Juni 2027"), key="amend_inp_tgl_akhir_kontrak")
+
+        st.divider()
         st.markdown("**Klausul Perubahan & Dokumen Acuan**")
         dasar_dokumen_text = st.text_area(
             "Dasar Perubahan (Surat / Notulen / Berita Acara - satu per baris)",
@@ -162,7 +182,7 @@ def render_amendment_generator_page() -> None:
 
     # 3. Tombol Eksekusi Generate
     if st.button("🚀 Generate Dokumen Amandemen", key="btn_run_generate_amendment", type="primary", use_container_width=True):
-        with st.spinner("Menyusun dokumen amandemen resmi berbasis format pokok-pokok kontrak..."):
+        with st.spinner("Menyusun dokumen amandemen resmi berbasis format pokok-pokok kontrak dan lampiran lengkap..."):
             dasar_list = [line.strip() for line in dasar_dokumen_text.splitlines() if line.strip()]
             params_to_build = {
                 "project_name": project_name.strip(),
@@ -188,6 +208,12 @@ def render_amendment_generator_page() -> None:
                 "tambahan_pekerjaan": tambahan_pekerjaan.strip() if tambahan_pekerjaan.strip() else None,
                 "dasar_dokumen": dasar_list if dasar_list else extracted["dasar_dokumen"],
                 "portal_autentifikasi": extracted["portal_autentifikasi"],
+                "mpp_hari": mpp_hari,
+                "mpl_hari": mpl_hari,
+                "mpa_hari": mpa_hari,
+                "mpl_tanggal": mpl_tanggal.strip(),
+                "mpa_tanggal": mpa_tanggal.strip(),
+                "tanggal_akhir_kontrak": tanggal_akhir_kontrak.strip(),
             }
 
             try:
