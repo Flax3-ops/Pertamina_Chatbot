@@ -1,6 +1,6 @@
 # Pertamina Procurement AI & Knowledge Assistant
 
-Alur **Pembuatan RKS dan preview** tersedia melalui menu Streamlit dan endpoint `/api/rks`. Lihat [panduan modul RKS](tools/rks/README.md) untuk penggunaan, renderer, dan batasan hasil ekstraksi.
+Alur **Pembuatan RKS dan preview** tersedia melalui menu Streamlit dan endpoint `/api/rks`. Lihat [panduan modul RKS](tools/rks/README.md) untuk penggunaan, renderer, dan batasan hasil ekstraksi. Untuk panduan pengujian fitur antarmuka Streamlit secara menyeluruh, silakan rujuk [Panduan Pengujian Streamlit](README_TESTING_STREAMLIT.md).
 
 Platform AI terintegrasi untuk membantu dan mengotomatisasi proses pengadaan di lingkungan **PT Pertamina Patra Niaga**:
 1. **💬 Chatbot AI & RKS Viewer:** Asisten interaktif berbasis RAG (*Retrieval-Augmented Generation*) untuk pencarian, telaah, dan konversi dokumen RKS (*Rencana Kerja dan Syarat-Syarat*) dari database PostgreSQL menjadi format Microsoft Word (.docx) resmi Pertamina.

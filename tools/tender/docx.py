@@ -14,6 +14,7 @@ Renders the complete formal tender package:
 
 import os
 import json
+from io import BytesIO
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
@@ -24,11 +25,18 @@ from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.oxml.ns import qn, nsdecls
 from docx.oxml import parse_xml
 
-from tender.static_content import (
-    BAB_II_ARTICLES,
-    CSMS_MATRIX_DATA,
-    CONTRACT_ARTICLES,
-)
+try:
+    from tools.tender.static_content import (
+        BAB_II_ARTICLES,
+        CSMS_MATRIX_DATA,
+        CONTRACT_ARTICLES,
+    )
+except ModuleNotFoundError:
+    from .static_content import (
+        BAB_II_ARTICLES,
+        CSMS_MATRIX_DATA,
+        CONTRACT_ARTICLES,
+    )
 
 # ──────────────────────────────────────────────────────────────
 # Constants & Colors
@@ -1798,6 +1806,22 @@ def _render_bagian_b_rancangan_kontrak(doc: Document, tender_data: dict):
 # ──────────────────────────────────────────────────────────────
 # Main Render Function
 # ──────────────────────────────────────────────────────────────
+
+def render_contract_to_docx_bytes(tender_data: dict) -> bytes:
+    """Create a standalone, editable Bagian B from the same generated tender draft."""
+    doc = Document()
+    for section in doc.sections:
+        section.top_margin = Cm(2.5)
+        section.bottom_margin = Cm(2.5)
+        section.left_margin = Cm(2.5)
+        section.right_margin = Cm(2.5)
+    doc.styles["Normal"].font.name = "Arial"
+    doc.styles["Normal"].font.size = Pt(10)
+    _render_bagian_b_rancangan_kontrak(doc, tender_data)
+    output = BytesIO()
+    doc.save(output)
+    return output.getvalue()
+
 
 def render_tender_to_docx(tender_data: dict, output_filename: str = "") -> str:
     """

@@ -141,11 +141,97 @@ def loader(file_path="./data", connection=PGVECTOR_CONNECTION, *, collection_nam
     return report
 
 
+def list_active_documents(connection=PGVECTOR_CONNECTION, collection_name="knowledge_base") -> list[dict]:
+    """Returns a list of all active documents in the PostgreSQL knowledge base."""
+    with _connect(connection) as conn:
+        _initialize(conn)
+        rows = conn.execute("""
+            SELECT id, title, source_path, file_format, indexed_at
+            FROM documents
+            WHERE collection_name = %s AND is_active
+            ORDER BY title ASC
+        """, (collection_name,)).fetchall()
+        return [
+            {
+                "id": str(r[0]),
+                "title": r[1],
+                "source_path": r[2],
+                "file_format": r[3],
+                "indexed_at": r[4].isoformat() if r[4] else None,
+            }
+            for r in rows
+        ]
+
+
+def delete_document(target: str, connection=PGVECTOR_CONNECTION, collection_name="knowledge_base", purge: bool = False) -> dict:
+    """
+    Deactivates or permanently removes a document and its vector embeddings.
+    target can be a filename, source_path, or document UUID.
+    If purge=True, the row is deleted from the documents table completely.
+    """
+    with _connect(connection) as conn:
+        _initialize(conn)
+        rows = conn.execute("""
+            SELECT id, title, source_path FROM documents
+            WHERE collection_name = %s AND (
+                id::text = %s OR title = %s OR source_path = %s OR source_path LIKE %s
+            )
+        """, (collection_name, target, target, target, f"%{target}")).fetchall()
+
+        if not rows:
+            return {"status": "not_found", "message": f"Dokumen '{target}' tidak ditemukan di koleksi '{collection_name}'."}
+
+        deleted_summary = []
+        for doc_id, title, source_path in rows:
+            cur = conn.execute("""
+                DELETE FROM langchain_pg_embedding e USING langchain_pg_collection c
+                WHERE e.collection_id = c.uuid AND c.name = %s AND (
+                    e.cmetadata->>'document_id' = %s OR e.cmetadata->>'file_name' = %s
+                )
+            """, (collection_name, str(doc_id), title))
+            chunk_count = cur.rowcount
+
+            if purge:
+                conn.execute("DELETE FROM documents WHERE id = %s", (doc_id,))
+            else:
+                conn.execute("UPDATE documents SET is_active = FALSE WHERE id = %s", (doc_id,))
+
+            deleted_summary.append({
+                "id": str(doc_id),
+                "title": title,
+                "deleted_embedding_chunks": chunk_count,
+                "action": "purged" if purge else "deactivated"
+            })
+
+        conn.commit()
+        return {
+            "status": "success",
+            "collection": collection_name,
+            "affected_count": len(deleted_summary),
+            "documents": deleted_summary
+        }
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Indeks knowledge base PDF dan DOCX.")
-    parser.add_argument("directory", nargs="?", default="./data")
-    parser.add_argument("--collection", default="knowledge_base")
+    parser = argparse.ArgumentParser(description="Indeks dan kelola knowledge base PDF/DOCX.")
+    parser.add_argument("directory", nargs="?", default="./data", help="Direktori berisi file PDF/DOCX untuk diindeks (default: ./data)")
+    parser.add_argument("--collection", default="knowledge_base", help="Nama koleksi PGVector (default: knowledge_base)")
+    parser.add_argument("--list", action="store_true", help="Tampilkan daftar semua dokumen yang aktif di knowledge base")
+    parser.add_argument("--delete", metavar="TARGET", help="Hapus atau nonaktifkan dokumen berdasarkan nama file, path, atau UUID")
+    parser.add_argument("--purge", action="store_true", help="Hapus record dari database permanen (digunakan bersama --delete)")
+
     args = parser.parse_args()
+
+    if args.list:
+        docs = list_active_documents(collection_name=args.collection)
+        print(json.dumps({"total": len(docs), "documents": docs}, ensure_ascii=False, indent=2))
+        return
+
+    if args.delete:
+        result = delete_document(args.delete, collection_name=args.collection, purge=args.purge)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+
     report = loader(args.directory, collection_name=args.collection)
     print(json.dumps(report, ensure_ascii=True, indent=2))
     if report["failed"]:

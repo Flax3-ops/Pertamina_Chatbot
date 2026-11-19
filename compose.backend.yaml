@@ -1,19 +1,46 @@
+# Deploy backend FastAPI di VPS: backend + Caddy (HTTPS otomatis via Let's Encrypt).
+# Prasyarat di .env: DATABASE_URL (Supabase session pooler), OPENROUTER_API_KEY,
+# API_DOMAIN (mis. api.domainanda.com, DNS A record -> IP VPS), CORS_ORIGINS.
+# Jalankan: docker compose -f compose.backend.yaml up -d --build
 services:
   backend:
     build:
       context: .
       dockerfile: Dockerfile.backend
+      args:
+        EMBEDDING_MODEL: ${EMBEDDING_MODEL:-sentence-transformers/all-minilm-l6-v2}
     container_name: pertamina-backend
     env_file:
       - .env
     environment:
       FASTAPI_HOST: 0.0.0.0
       FASTAPI_PORT: 8000
-      PGVECTOR_HOST: host.docker.internal
-      PGVECTOR_PORT: ${PGVECTOR_PORT:-15433}
+    expose:
+      - "8000"
     ports:
+      # Hanya untuk debug dari VPS itu sendiri (curl localhost:8000); publik lewat Caddy.
       - "127.0.0.1:8000:8000"
     volumes:
       - ./output:/app/output
       - ./data:/app/data:ro
     restart: unless-stopped
+
+  caddy:
+    image: caddy:2.8
+    container_name: pertamina-caddy
+    depends_on:
+      - backend
+    environment:
+      API_DOMAIN: ${API_DOMAIN:?Set API_DOMAIN di .env, mis. api.domainanda.com}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

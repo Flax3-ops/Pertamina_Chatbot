@@ -22,11 +22,19 @@ from tools.tender.docx import OUTPUT_DIR
 from tools.tender.docx import render_contract_to_docx_bytes
 from tools.tender.contract_archive import ContractArchive
 from api.rks import router as rks_router
+from api.chat import router as chat_router
+from api.gdrive import router as gdrive_router
 
 load_dotenv()
 
 HOST = os.getenv("FASTAPI_HOST", "127.0.0.1")
 PORT = int(os.getenv("FASTAPI_PORT", "8000"))
+
+# Comma-separated list of allowed browser origins, e.g.
+# "https://pertamina-chatbot.vercel.app,http://localhost:5173". Default "*".
+CORS_ORIGINS = [o.strip().rstrip("/") for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()] or ["*"]
+# Optional regex for Vercel preview deployments, e.g. r"https://.*\.vercel\.app".
+CORS_ORIGIN_REGEX = os.getenv("CORS_ORIGIN_REGEX") or None
 
 app = FastAPI(
     title="Pertamina Tender Generator API",
@@ -34,11 +42,14 @@ app = FastAPI(
     version="1.0.0",
 )
 app.include_router(rks_router)
+app.include_router(chat_router)
+app.include_router(gdrive_router)
 
 # Enable CORS for Streamlit / Frontend access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
+    allow_origin_regex=CORS_ORIGIN_REGEX,
     # This API does not use cookie-based authentication. Browsers reject
     # wildcard origins when credentialed requests are enabled.
     allow_credentials=False,
@@ -278,8 +289,45 @@ def download_tender_docx(filename: str):
     )
 
 
+@app.get("/api/download/{filename}")
+def download_file(filename: str):
+    """
+    General file download endpoint for any converted or generated DOCX/PDF files.
+    """
+    safe_filename = os.path.basename(filename)
+    file_path = OUTPUT_DIR / safe_filename
+
+    if not file_path.exists():
+        # Search output directory recursively
+        candidates = list(OUTPUT_DIR.glob(f"**/{safe_filename}"))
+        if candidates:
+            file_path = candidates[0]
+        else:
+            raise HTTPException(status_code=404, detail=f"File {safe_filename} tidak ditemukan.")
+
+    media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    if safe_filename.lower().endswith(".pdf"):
+        media_type = "application/pdf"
+
+    return FileResponse(
+        path=str(file_path),
+        filename=safe_filename,
+        media_type=media_type,
+        content_disposition_type="attachment",
+    )
+
+
 if __name__ == "__main__":
     import uvicorn
-    print(f"🚀 Starting Pertamina Tender Generator API on http://{HOST}:{PORT}")
-    uvicorn.run("api.main:app", host=HOST, port=PORT, reload=True)
+    # Plain ASCII: Windows consoles using cp1252 crash on emoji output.
+    print(f"Starting Pertamina Tender Generator API on http://{HOST}:{PORT}")
+    uvicorn.run(
+        "api.main:app",
+        host=HOST,
+        port=PORT,
+        reload=True,
+        reload_dirs=["api", "tools", "rag"],
+        reload_includes=["*.py"],
+        reload_excludes=[".venv", "Frontend", "node_modules", "dist", "output", ".git", "__pycache__"],
+    )
 

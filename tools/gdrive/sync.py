@@ -100,8 +100,12 @@ def _list_all_files_recursive(service, root_folder_id: str) -> Dict[str, Dict[st
             if not page_token:
                 break
 
-        # 2. Look for PDF files in this folder
-        file_query = f"'{current_id}' in parents and mimeType = 'application/pdf' and trashed = false"
+        # 2. Look for PDF and DOCX files in this folder
+        file_query = (
+            f"'{current_id}' in parents and "
+            f"(mimeType = 'application/pdf' or mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') "
+            f"and trashed = false"
+        )
         page_token = None
         while True:
             resp = service.files().list(

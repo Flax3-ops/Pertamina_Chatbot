@@ -3,17 +3,82 @@ import re
 import json
 import uuid
 import ast
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from textwrap import dedent
 import streamlit as st
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, SystemMessage
-from agent import app, tools
+try:
+    from agent import app, tools
+    AGENT_IMPORT_ERROR = None
+except Exception as exc:
+    # Keep the independent Tender Generator usable when chatbot setup is
+    # incomplete (for example, OPENROUTER_API_KEY is not configured yet).
+    app, tools = None, []
+    AGENT_IMPORT_ERROR = str(exc)
+try:
+    from tools.tender.streamlit_tender_view import render_tender_generator_page
+except Exception:
+    try:
+        import importlib
+        import tools.tender.streamlit_tender_view as _tv
+        importlib.reload(_tv)
+        render_tender_generator_page = _tv.render_tender_generator_page
+    except Exception as _tv_err:
+        _tv_err_msg = str(_tv_err)
+
+        def render_tender_generator_page(*args, **kwargs):
+            st.error(f"Gagal memuat modul Tender Generator: {_tv_err_msg}")
+
+try:
+    from tools.rks.streamlit_view import render_rks_page, render_chat_preview
+except Exception:
+    def render_rks_page(*args, **kwargs):
+        st.error("Gagal memuat modul RKS Generator.")
+
+    def render_chat_preview(*args, **kwargs):
+        pass
+
+try:
+    from tools.rks.library_view import render_rks_library
+except Exception:
+    def render_rks_library(*args, **kwargs):
+        st.error("Gagal memuat modul Gudang RKS.")
+
+try:
+    from tools.tender.contract_library_view import render_contract_library
+except Exception:
+    def render_contract_library(*args, **kwargs):
+        st.error("Gagal memuat modul Gudang Kontrak.")
+
+try:
+    from tools.amendment.streamlit_amendment_view import render_amendment_generator_page
+except Exception:
+    def render_amendment_generator_page(*args, **kwargs):
+        st.error("Gagal memuat modul Amandemen Generator.")
+
+try:
+    from tools.amendment.library_view import render_amendment_library
+except Exception:
+    def render_amendment_library(*args, **kwargs):
+        st.error("Gagal memuat modul Gudang Amandemen.")
+
+try:
+    from tools.gdrive.streamlit_view import render_gdrive_settings_section
+except Exception:
+    def render_gdrive_settings_section():
+        st.markdown("**☁️ Integrasi Google Drive**")
+        st.info("Pustaka Google Drive belum selesai diinstal di server cloud. Silakan Clear cache and deploy di Streamlit Cloud.")
+
+from tools.rks.chat import current_document as select_chat_document
 from tools.docx_exporter import parse_text_to_rks_data, render_to_docx
-import psycopg
 from tools.pdf_converter import find_matching_pdf, convert_pdf_to_docx_layout, get_pdf_metadata, DATA_DIR
 from rag.conversation_store import ConversationStore
+from rag.vector_store import get_raw_psycopg_connection
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Page Configuration & Professional Theming
@@ -589,7 +654,7 @@ def open_pdf_converter_dialog(doc_title: str, doc_content: str = "", pdf_path: s
     # If doc_content is empty, try fetching from PostgreSQL
     if not doc_content:
         try:
-            with psycopg.connect("dbname=langchain user=langchain password=langchain host=127.0.0.1 connect_timeout=5") as conn:
+            with get_raw_psycopg_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute(
                         "SELECT full_content FROM documents WHERE title ILIKE %s LIMIT 1;",
@@ -835,9 +900,9 @@ with st.sidebar:
             with st.expander("🔄 Convert Any Repository PDF", expanded=False):
                 st.caption("Select any PDF from the repository database to convert via popup dialog:")
                 pdf_options = {p.name: str(p.resolve()) for p in all_repo_pdfs}
-                selected_pdf_name = st.selectbox("Choose PDF", list(pdf_options.keys()), key="sidebar_pdf_selector")
-                if st.button("Open Conversion Popup", key="btn_open_sidebar_dialog", use_container_width=True):
-                    open_pdf_converter_dialog(pdf_options[selected_pdf_name], selected_pdf_name)
+                selected_pdf_name = st.selectbox("Choose PDF", list(pdf_options.keys()), key="sidebar_pdf_selector_settings")
+                if st.button("Open Conversion Popup", key="btn_open_sidebar_dialog_settings", use_container_width=True):
+                    open_pdf_converter_dialog(doc_title=selected_pdf_name, pdf_path=pdf_options[selected_pdf_name])
 
         # 4. Converted Documents Element
         output_dir = Path("./output")
