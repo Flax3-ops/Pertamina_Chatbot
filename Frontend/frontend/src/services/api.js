@@ -1,9 +1,46 @@
 import axios from 'axios'
 
+// Origin backend FastAPI. Kosong = same-origin (dev lokal memakai proxy Vite).
+// Produksi (Vercel): set VITE_API_URL, mis. https://api.domainanda.com
+const API_ORIGIN = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '')
+
+/**
+ * Tambahkan origin backend ke path relatif `/api/...`.
+ * URL absolut (http/https) dikembalikan apa adanya.
+ * @param {string} path
+ */
+export const apiUrl = (path) =>
+  typeof path === 'string' && path.startsWith('/api') ? `${API_ORIGIN}${path}` : path
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: apiUrl('/api'),
   timeout: 180000,
 })
+
+/**
+ * Ubah error axios/FastAPI menjadi string yang aman dirender React.
+ * FastAPI mengirim `detail` sebagai string (HTTPException) atau array objek
+ * `{loc, msg, type}` (error validasi 422).
+ * @param {unknown} err
+ * @param {string} fallback
+ * @returns {string}
+ */
+export function getErrorMessage(err, fallback = 'Terjadi kesalahan.') {
+  const detail = err?.response?.data?.detail
+  if (typeof detail === 'string' && detail.trim()) return detail
+  if (Array.isArray(detail) && detail.length) {
+    return detail
+      .map(d => {
+        if (typeof d === 'string') return d
+        const field = Array.isArray(d?.loc) ? d.loc.filter(p => p !== 'body').join('.') : ''
+        const msg = d?.msg ?? JSON.stringify(d)
+        return field ? `${field}: ${msg}` : msg
+      })
+      .join('; ')
+  }
+  if (detail && typeof detail === 'object') return detail.msg ?? JSON.stringify(detail)
+  return err?.message || fallback
+}
 
 // ── Chat ──────────────────────────────────────────────────────────────────────
 
@@ -62,7 +99,7 @@ export const tenderService = {
   generate: (payload) =>
     api.post('/tender/generate', payload).then(r => r.data),
 
-  downloadUrl: (filename) => `/api/tender/download/${encodeURIComponent(filename)}`,
+  downloadUrl: (filename) => apiUrl(`/api/tender/download/${encodeURIComponent(filename)}`),
 }
 
 // ── RKS ──────────────────────────────────────────────────────────────────────
@@ -74,9 +111,9 @@ export const rksService = {
   list: () =>
     api.get('/rks/generated').then(r => r.data),
 
-  downloadDocxUrl: (artifactId) => `/api/rks/${encodeURIComponent(artifactId)}/document.docx`,
-  downloadPdfUrl: (artifactId) => `/api/rks/${encodeURIComponent(artifactId)}/preview.pdf`,
-  downloadUrl: (artifactId) => `/api/rks/${encodeURIComponent(artifactId)}/document.docx`,
+  downloadDocxUrl: (artifactId) => apiUrl(`/api/rks/${encodeURIComponent(artifactId)}/document.docx`),
+  downloadPdfUrl: (artifactId) => apiUrl(`/api/rks/${encodeURIComponent(artifactId)}/preview.pdf`),
+  downloadUrl: (artifactId) => apiUrl(`/api/rks/${encodeURIComponent(artifactId)}/document.docx`),
 }
 
 // ── Health ───────────────────────────────────────────────────────────────────

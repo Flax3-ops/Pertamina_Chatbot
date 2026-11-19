@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Upload, FileText, ClipboardList, AlertCircle, CheckCircle, Download, Loader2 } from 'lucide-react'
-import { tenderService } from '../services/api'
+import { tenderService, getErrorMessage } from '../services/api'
 import './FormPage.css'
 
 function FieldGroup({ label, children, hint }) {
@@ -72,7 +72,7 @@ export default function TenderPage() {
       }))
       setStep(2)
     } catch (e) {
-      setError(e?.response?.data?.detail || e.message || 'Gagal mengekstrak konteks dari dokumen.')
+      setError(getErrorMessage(e, 'Gagal mengekstrak konteks dari dokumen.'))
     } finally {
       setExtracting(false)
     }
@@ -93,7 +93,7 @@ export default function TenderPage() {
       setResult(data)
       setStep(3)
     } catch (e) {
-      setError(e?.response?.data?.detail || e.message || 'Gagal menghasilkan Dokumen Tender.')
+      setError(getErrorMessage(e, 'Gagal menghasilkan Dokumen Tender.'))
     } finally {
       setGenerating(false)
     }

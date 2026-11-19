@@ -3,11 +3,25 @@
 .uv-cache
 .uv-python
 .worktrees
+.vscode
+__pycache__
+**/__pycache__
+*.py[cod]
+
+# Frontend di-deploy terpisah (Vercel). Linux case-sensitive: tulis dua-duanya.
+Frontend
 frontend
+**/node_modules
+
+# Data & hasil di-mount sebagai volume, bukan dibakar ke image
 data
 output
+tmp
+
+# Rahasia: dibaca lewat env_file saat runtime, jangan masuk image
 .env
+.env.*
 .aws
 .streamlit/secrets.toml
-__pycache__
-*.py[cod]
+credentials*.json
+token*.json

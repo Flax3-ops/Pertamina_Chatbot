@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import MessageList from '../components/chat/MessageList'
 import ChatInput from '../components/chat/ChatInput'
-import { chatService } from '../services/api'
+import { chatService, getErrorMessage } from '../services/api'
 import './ChatPage.css'
 
 /**
@@ -41,7 +41,7 @@ export default function ChatPage({ activeThreadId, onThreadChange }) {
       .then(data => setMessages(normaliseMessages(data.messages ?? [])))
       .catch((err) => {
         setMessages([])
-        setError(err?.response?.data?.detail || 'Gagal memuat pesan percakapan.')
+        setError(getErrorMessage(err, 'Gagal memuat pesan percakapan.'))
       })
       .finally(() => setLoading(false))
   }, [activeThreadId])
@@ -65,8 +65,8 @@ export default function ChatPage({ activeThreadId, onThreadChange }) {
 
       setMessages(normaliseMessages(data.messages ?? []))
     } catch (err) {
-      let errMsg = err?.response?.data?.detail ?? err.message ?? 'Terjadi kesalahan.'
-      if (err.code === 'ECONNABORTED' || (typeof errMsg === 'string' && errMsg.includes('timeout'))) {
+      let errMsg = getErrorMessage(err, 'Terjadi kesalahan.')
+      if (err.code === 'ECONNABORTED' || errMsg.includes('timeout')) {
         errMsg = 'Permintaan membutuhkan waktu lebih lama dari batas waktu (timeout). Server sedang memproses tugas berat atau LLM sedang sibuk. Silakan coba kembali.'
       }
       setError(errMsg)

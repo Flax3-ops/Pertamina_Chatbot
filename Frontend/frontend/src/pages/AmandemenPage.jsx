@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FilePen, AlertCircle, CheckCircle, Loader2, ArrowRight } from 'lucide-react'
-import api from '../services/api'
+import api, { getErrorMessage } from '../services/api'
 import './FormPage.css'
 
 export default function AmandemenPage({ onSelectThread }) {
@@ -34,7 +34,7 @@ export default function AmandemenPage({ onSelectThread }) {
         thread_id: data?.thread_id,
       })
     } catch (err) {
-      setError(err?.response?.data?.detail || err.message || 'Gagal mengajukan dokumen amandemen.')
+      setError(getErrorMessage(err, 'Gagal mengajukan dokumen amandemen.'))
     } finally {
       setLoading(false)
     }

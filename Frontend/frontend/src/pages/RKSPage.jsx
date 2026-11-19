@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { FileText, AlertCircle, CheckCircle, Download, ExternalLink, Loader2 } from 'lucide-react'
-import { rksService } from '../services/api'
+import { rksService, getErrorMessage } from '../services/api'
 import './FormPage.css'
 
 export default function RKSPage() {
@@ -23,7 +23,7 @@ export default function RKSPage() {
         setResult(data)
       }
     } catch (err) {
-      setError(err?.response?.data?.detail || err.message || 'Terjadi kesalahan saat membuat RKS.')
+      setError(getErrorMessage(err, 'Terjadi kesalahan saat membuat RKS.'))
     } finally {
       setLoading(false)
     }

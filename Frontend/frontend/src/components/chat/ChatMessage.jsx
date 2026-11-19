@@ -16,6 +16,7 @@ import {
   Download,
   ExternalLink,
 } from "lucide-react";
+import { apiUrl } from "../../services/api";
 import "./ChatMessage.css";
 
 // ── Tool Call Card ────────────────────────────────────────────────────────────
@@ -124,7 +125,7 @@ function FileDownloadCard({ file }) {
         </div>
       </div>
       <a
-        href={file.url}
+        href={apiUrl(file.url)}
         download={file.name}
         className="chat-file-download-btn"
         title={`Unduh ${file.name}`}
@@ -306,7 +307,7 @@ export default function ChatMessage({ message }) {
                       if (isDownload) {
                         return (
                           <a
-                            href={href}
+                            href={apiUrl(href)}
                             download
                             className="inline-download-link"
                             {...props}

@@ -2,21 +2,40 @@ FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    HF_HOME=/opt/hf-cache
+
+# LibreOffice  -> RKS preview.pdf (DOCX -> PDF) di Linux
+# libgl1/glib  -> dependensi native docling/opencv
+# curl         -> healthcheck
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+        libreoffice-writer-nogui fonts-dejavu-core fonts-liberation \
+        libgl1 libglib2.0-0 curl \
+ && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-COPY requirements.backend.txt ./
-RUN pip install --no-cache-dir -r requirements.backend.txt
+# 1) torch versi CPU dipasang lebih dulu agar tidak ikut menarik paket CUDA (beberapa GB).
+# 2) Sisa dependensi diambil dari pyproject.toml (sumber yang sama dengan dev lokal).
+COPY pyproject.toml ./
+RUN pip install --no-cache-dir uv \
+ && uv pip install --system --no-cache --index-url https://download.pytorch.org/whl/cpu torch \
+ && uv pip install --system --no-cache -r pyproject.toml
 
-COPY api ./api
-COPY config.py ./config.py
-COPY rag ./rag
-COPY tools/tender ./tools/tender
-COPY tools/rks ./tools/rks
-COPY assets ./assets
-RUN mkdir -p /app/output
+# Model embedding dimuat dengan local_files_only=True (rag/vector_store.py),
+# jadi harus sudah ada di image. Samakan dengan EMBEDDING_MODEL di .env.
+ARG EMBEDDING_MODEL=sentence-transformers/all-minilm-l6-v2
+RUN python -c "from huggingface_hub import snapshot_download; snapshot_download('${EMBEDDING_MODEL}')"
+
+COPY . .
+RUN mkdir -p /app/output /app/data
 
 EXPOSE 8000
 
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+    CMD curl -fsS http://127.0.0.1:8000/api/health || exit 1
+
+# Satu worker: memori percakapan LangGraph (MemorySaver) disimpan in-process.
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", \
+     "--proxy-headers", "--forwarded-allow-ips", "*", "--timeout-keep-alive", "75"]
