@@ -616,7 +616,7 @@ def _render_lampiran_g(doc: Document, params: Dict[str, Any], amendment_level: s
         "v. Berita Acara Klarifikasi dan Negosiasi Amendemen Waktu dan Biaya No.951/PND95C000/2025-S5 tanggal 02 Desember 2025."
     ]
 
-    docs = params.get("dokumen_pengadaan", default_docs)
+    docs = params.get("dokumen_pengadaan") or default_docs
     for doc_item in docs:
         p_item = doc.add_paragraph()
         p_item.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
@@ -953,12 +953,13 @@ def build_amendment_docx(params: Dict[str, Any]) -> bytes:
     r.font.size = Pt(10)
 
     # Basis documents (a, b, c, d)
-    dasar_dokumen = params.get("dasar_dokumen", [
+    default_dasar = [
         f"Surat KONTRAKTOR kepada PERUSAHAAN No.10150.S/DPPU-IKN/PGAS/XI/2025 tanggal 21 November 2025 perihal Revisi Penawaran Harga dan Waktu pada {project_name};",
         f"Notulen Rapat No.NR-794/PND95C000/2025-S5 tanggal 13 Oktober 2025 perihal War Room dan Pembahasan Pengajuan Amendemen Pekerjaan {project_name};",
         f"Notulen Rapat No.NR-950/PND95C000/2025-S5 tanggal 18 November 2025 perihal Pembahasan Pengajuan Amendemen Pekerjaan {project_name};",
         "Berita Acara Klarifikasi dan Negosiasi Amendemen Waktu dan Biaya No.951/PND95C000/2025-S5 tanggal 02 Desember 2025."
-    ])
+    ]
+    dasar_dokumen = params.get("dasar_dokumen") or default_dasar
     letters = ["a", "b", "c", "d", "e", "f"]
     for i, doc_item in enumerate(dasar_dokumen):
         let = letters[i] if i < len(letters) else f"{i+1}"
