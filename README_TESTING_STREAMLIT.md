@@ -1,182 +1,126 @@
 # Panduan Pengujian Fitur Antarmuka Streamlit (Pertamina AI Assistant)
 
-Dokumen ini merupakan panduan pengujian fitur (*feature testing guide*) menyeluruh untuk aplikasi antarmuka **Streamlit** ([streamlit_app.py](streamlit_app.py)). Panduan ini mencakup checklist pengujian manual (*manual test matrix*), skenario uji langkah demi langkah, pengujian otomatis (*automated unit testing*), dan penanganan masalah umum (*troubleshooting*).
+Panduan ini ditujukan untuk pengujian fitur (*User Acceptance Testing* / UAT) pada aplikasi web antarmuka **Streamlit** yang telah aktif dan ter-deploy di cloud. **Seluruh pengujian dilakukan langsung melalui peramban web (*browser*) tanpa perlu menjalankan perintah terminal apa pun.**
 
 ---
 
-## 📋 Daftar Isi
-1. [Prasyarat & Persiapan Lingkungan](#1-prasyarat--persiapan-lingkungan)
-2. [Cara Menjalankan Streamlit App](#2-cara-menjalankan-streamlit-app)
-3. [Matriks Pengujian Fitur (Manual Testing)](#3-matriks-pengujian-fitur-manual-testing)
-   - [A. Manajemen Sesi Percakapan (Thread Management)](#a-manajemen-sesi-percakapan-thread-management)
-   - [B. 💬 Chatbot AI & RAG Knowledge Retrieval](#b--chatbot-ai--rag-knowledge-retrieval)
-   - [C. Pratinjau & Ekspor Dokumen RKS (.docx)](#c-pratinjau--ekspor-dokumen-rks-docx)
-   - [D. 📑 Dokumen Tender Generator](#d--dokumen-tender-generator)
-   - [E. 📝 Dokumen Amendemen Generator](#e--dokumen-amendemen-generator)
-   - [F. 📚 Gudang Dokumen (Library Catalog)](#f--gudang-dokumen-library-catalog)
-   - [G. ☁️ Integrasi Google Drive Knowledge Base](#g-️-integrasi-google-drive-knowledge-base)
-4. [Pengujian Otomatis (Automated Unit & Regression Tests)](#4-pengujian-otomatis-automated-unit--regression-tests)
-5. [Troubleshooting & Solusi Kendala Pengujian](#5-troubleshooting--solusi-kendala-pengujian)
+## 🌐 Tautan Akses Pengujian
+
+Buka peramban (*Google Chrome, Microsoft Edge, Firefox, atau Safari*) dan akses tautan berikut:
+
+🔗 **[https://pertaminachatbot-enawev7dvaq8t6sj79yrba.streamlit.app/?chat_thread=thread_745384a2dfb04f0598b3ac96e3be716c](https://pertaminachatbot-enawev7dvaq8t6sj79yrba.streamlit.app/?chat_thread=thread_745384a2dfb04f0598b3ac96e3be716c)**
 
 ---
 
-## 1. Prasyarat & Persiapan Lingkungan
+## 📋 Daftar Skenario Pengujian Fitur
 
-Sebelum memulai pengujian, pastikan:
-1. **Python 3.12+** dan tool manager `uv` telah terpasang.
-2. File konfigurasi `.env` di root direktori telah terisi dengan kunci yang valid:
-   ```env
-   OPENROUTER_API_KEY="sk-or-v1-..."
-   TAVILY_API_KEY="tvly-..."
-   DATABASE_URL="postgresql://user:password@localhost:5432/langchain"
-   # atau parameter PGVector host:
-   PGVECTOR_HOST="127.0.0.1"
-   PGVECTOR_PORT=5432
-   PGVECTOR_DB="langchain"
-   PGVECTOR_USER="langchain"
-   PGVECTOR_PASSWORD="langchain"
-   ```
-3. Database PostgreSQL lokal atau Supabase aktif dan tabel `documents`, `chat_threads`, `chat_messages` dapat diakses.
-
----
-
-## 2. Cara Menjalankan Streamlit App
-
-Jalankan perintah berikut di terminal:
-
-```powershell
-uv run streamlit run streamlit_app.py
 ```
-> Atau tentukan port spesifik jika diperlukan:
-> ```powershell
-> uv run streamlit run streamlit_app.py --server.port 8501
-> ```
-
-Buka peramban (*browser*) Anda pada tautan: **`http://localhost:8501`**.
-
----
-
-## 3. Matriks Pengujian Fitur (Manual Testing)
-
-### A. Manajemen Sesi Percakapan (Thread Management)
-
-| ID Uji | Fitur / Skenario | Langkah Pengujian | Ekspektasi Hasil |
-| :--- | :--- | :--- | :--- |
-| **TC-TH-01** | Membuat Sesi Percakapan Baru | Klik tombol **`➕ New Chat`** pada sidebar kiri. | Sesi percakapan baru dibuat dengan judul otomatis default, area chat bersih dari pesan lama, dan parameter URL `?chat_thread=<id>` diperbarui. |
-| **TC-TH-02** | Memilih Percakapan Sebelumnya | Klik salah satu judul percakapan di daftar **`Recent Conversations`**. | Riwayat pesan obrolan sebelumnya termuat kembali dengan urutan waktu yang tepat. |
-| **TC-TH-03** | Mengubah Nama Percakapan (*Rename Session*) | Buka expander **`Pengaturan Tambahan`** > **`⚙️ Current Session Settings`**, ubah input teks pada *Rename Session*, lalu klik **`Save Name`**. | Judul percakapan pada sidebar langsung diperbarui dan tersimpan permanen di database. |
-| **TC-TH-04** | Menghapus Sesi Percakapan | Klik tombol silang **`✕`** di samping judul thread pada sidebar atau tombol **`🗑️ Delete Session`**. Konfirmasi di dialog modal. | Sesi percakapan terhapus dari daftar dan database. Jika sesi yang aktif dihapus, aplikasi otomatis mengarahkan ke sesi baru. |
-| **TC-TH-05** | Persistensi Riwayat Obrolan | Kirim beberapa pesan, lalu lakukan *refresh* halaman browser (F5). | Pesan, status tool, dan dokumen yang dihasilkan tetap utuh tidak hilang. |
-
----
-
-### B. 💬 Chatbot AI & RAG Knowledge Retrieval
-
-Pastikan menu radio navigasi berada pada pilihan **`💬 Chatbot & RKS Viewer`**.
-
-| ID Uji | Fitur / Skenario | Input / Prompt Uji | Ekspektasi Hasil |
-| :--- | :--- | :--- | :--- |
-| **TC-CB-01** | Tanya Jawab Regulasi Spesifik (RAG Clause Retrieval) | *"Berapa lama masa sanggah untuk tender pekerjaan konstruksi sesuai pedoman pengadaan?"* | 1. Agen memanggil tool `fetch_relevant_documents`.<br>2. Jawaban menyertakan rujukan dokumen resmi (`📄 Dokumen: ...`).<br>3. Jawaban menyertakan batas waktu sanggahan yang terstruktur dan objektif. |
-| **TC-CB-02** | Pengambilan Dokumen Utuh | *"Tolong tampilkan draf RKS untuk pekerjaan overhaul tangki 041T304"* | 1. Agen memanggil tool `fetch_full_documents` atau `create_rks_document`.<br>2. Struktur bab RKS (Umum, Lingkup, Spesifikasi, Waktu) ditampilkan lengkap. |
-| **TC-CB-03** | Pencarian Informasi Eksternal (Web Search) | *"Berapa harga acuan baja ASTM A36 terkini di pasar?"* | 1. Agen memanggil tool `search_tool` (Tavily).<br>2. Menampilkan informasi relevan bersumber dari pencarian internet terkini. |
-| **TC-CB-04** | Inspeksi Eksekusi Tool (*Tool Call Trace*) | Kirim prompt yang memicu tool, lalu klik expander status tool di bawah pesan. | Rincian argumen pemanggilan tool dan respons mentah (*payload*) dapat diinspeksi dengan rapi tanpa error. |
-
----
-
-### C. Pratinjau & Ekspor Dokumen RKS (.docx)
-
-| ID Uji | Fitur / Skenario | Langkah / Prompt Uji | Ekspektasi Hasil |
-| :--- | :--- | :--- | :--- |
-| **TC-EX-01** | Konversi Dokumen via Perintah Chat | Masukkan prompt: *"Tolong konversikan dokumen RKS tadi ke format Microsoft Word (.docx)"* | 1. Agen memanggil tool `convert_pdf_to_docx`.<br>2. Muncul **Kartu Unduh Berkas** resmi dengan nama file `.docx` dan tombol **`📥 Unduh File Word (.docx)`** yang berfungsi mengunduh dokumen. |
-| **TC-EX-02** | Tab Pratinjau Halaman Dokumen RKS | Saat dokumen RKS dibuat atau ditarik, periksa tab pratinjau halaman visual di bawah pesan atau di panel samping. | Gambar pratinjau halaman (*preview rendering*) tertampil jelas dengan nomor halaman yang dapat dinavigasikan. |
-| **TC-EX-03** | Verifikasi Format Dokumen Word (.docx) | Buka berkas `.docx` yang telah diunduh menggunakan Microsoft Word atau LibreOffice. | Dokumen memiliki: Cover resmi Pertamina, Lembar Pengesahan, Daftar Isi otomatis, dan penomoran bab/pasal yang rapi. |
-
----
-
-### D. 📑 Dokumen Tender Generator
-
-Ubah menu navigasi radio pada sidebar menjadi **`📑 Dokumen Tender Generator`**.
-
-| ID Uji | Fitur / Skenario | Langkah Pengujian | Ekspektasi Hasil |
-| :--- | :--- | :--- | :--- |
-| **TC-TG-01** | Ekstraksi Konteks Dokumen RKS & BoQ | 1. Unggah file contoh RKS (`.pdf`) pada bagian *Unggah Dokumen Acuan*.<br>2. Unggah file BoQ (`.xlsx` / `.pdf`).<br>3. Klik **`🔍 Ekstrak Data Tender`**. | Kolom formulir seperti *Nama Pengadaan*, *Prime Cost*, *Total Biaya*, dan *Kategori CSMS* terisi secara otomatis dari hasil ekstraksi file. |
-| **TC-TG-02** | Pengisian Manual Data Tender | Isi/sesuaikan data: Nomor Tender, Pejabat Berwenang, TKDN Minimal (misal `30%`), Tanggal Pre-bid, dan Tempat Aanwijzing. | Input tersimpan pada state formulir tanpa ter-reset saat berpindah tab. |
-| **TC-TG-03** | Generate Dokumen Tender Lengkap | Klik tombol **`⚡ Generate Dokumen Tender`**. | 1. Sistem memproses penyusunan dokumen tender (IKPP 40 butir, 30 artikel ketentuan umum, Lampiran 2A evaluasi teknis, evaluasi CSMS, dan 18 pasal rancangan kontrak).<br>2. Tampil ringkasan berhasil serta tombol **Unduh Dokumen Tender (.docx)**. |
-| **TC-TG-04** | Validasi Unduhan Dokumen Tender | Klik tombol unduh berkas tender yang dihasilkan. | File Word berukuran normal terunduh, dapat dibuka, dan memuat format kontrak SP3MK resmi. |
-
----
-
-### E. 📝 Dokumen Amendemen Generator
-
-Ubah menu navigasi radio pada sidebar menjadi **`📝 Dokumen Amendemen Generator`**.
-
-| ID Uji | Fitur / Skenario | Langkah Pengujian | Ekspektasi Hasil |
-| :--- | :--- | :--- | :--- |
-| **TC-AG-01** | Pemilihan Kontrak Acuan | Pilih salah satu kontrak dari daftar kontrak yang tersimpan atau masukkan data kontrak dasar. | Rincian nomor kontrak awal, nilai kontrak awal, dan jangka waktu awal termuat. |
-| **TC-AG-02** | Penentuan Klausul Perubahan | Masukkan justifikasi perubahan (misal: perpanjangan waktu 30 hari kalender karena *force majeure* atau penyesuaian volume pekerjaan). | Kolom pokok-pokok amandemen terdefinisi dengan jelas. |
-| **TC-AG-03** | Ekspor Berkas Amandemen | Klik tombol **`Generate Dokumen Amendemen`**. | Menghasilkan berkas amandemen formal format `.docx` dengan lembar evaluasi dan justifikasi teknis. |
-
----
-
-### F. 📚 Gudang Dokumen (Library Catalog)
-
-Akses melalui expander atau menu Gudang Dokumen di sidebar.
-
-| ID Uji | Fitur / Skenario | Langkah Pengujian | Ekspektasi Hasil |
-| :--- | :--- | :--- | :--- |
-| **TC-LB-01** | Gudang RKS (*RKS Library*) | Buka tampilan **Gudang RKS**. | Menampilkan daftar seluruh dokumen RKS acuan, status ekstraksi, jumlah halaman, dan tombol unduh/pratinjau. |
-| **TC-LB-02** | Gudang Kontrak & Amendemen | Buka tampilan **Gudang Kontrak** / **Gudang Amendemen**. | Riwayat kontrak dan draf amandemen yang pernah dibuat tersimpan rapi dan dapat diunduh ulang kapan saja. |
-
----
-
-### G. ☁️ Integrasi Google Drive Knowledge Base
-
-Buka expander **`Pengaturan Tambahan`** > **`☁️ Integrasi Google Drive (RKS Knowledge Base)`** pada sidebar kiri.
-
-| ID Uji | Fitur / Skenario | Langkah Pengujian | Ekspektasi Hasil |
-| :--- | :--- | :--- | :--- |
-| **TC-GD-01** | Cek Status Autentikasi Akun | Perhatikan indikator koneksi akun Google. | Tertampil badge status hijau **`🟢 Terhubung: <email_google>`** jika kredensial `credentials.json` dan `token.json` valid. |
-| **TC-GD-02** | Input Folder ID / URL Google Drive | Masukkan URL atau ID folder Google Drive yang berisi berkas acuan RKS (misal: `1pnz9oBwHcE_mdU0PQnl7j4NoO0LFt8bd`). | Input tersimpan dan menampilkan total berkas yang terdeteksi di folder tersebut. |
-| **TC-GD-03** | Eksekusi Smart Delta Sync | Klik tombol **`🔄 Sinkronkan Sekarang`**. | 1. Menampilkan spinner progres sinkronisasi.<br>2. Menampilkan 4 metrik hasil: *File Baru*, *Diperbarui*, *Dihapus*, *Tidak Berubah*.<br>3. File PDF/DOCX baru otomatis terindeks ke PostgreSQL PGVector. |
-
----
-
-## 4. Pengujian Otomatis (Automated Unit & Regression Tests)
-
-Proyek ini telah dilengkapi dengan unit test berbasis `unittest` dan `streamlit.testing.v1.AppTest` untuk menguji fungsionalitas rendering dan regresi tanpa perlu membuka browser secara manual.
-
-### Menjalankan Seluruh Automated Test Suite:
-```powershell
-uv run python -m unittest discover tests -v
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                             NAVIGASI UTAMA                                 │
+│  ├─ 💬 Chatbot & RKS Viewer                                                │
+│  ├─ 📑 Dokumen Tender Generator                                            │
+│  └─ 📝 Dokumen Amendemen Generator                                         │
+│                                                                             │
+│  SIDEBAR:                                                                   │
+│  ├─ ➕ New Chat & Recent Conversations                                      │
+│  └─ ⚙️ Pengaturan Tambahan (Session Settings, Google Drive, Repo PDFs)      │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Menjalankan Uji Regresi Panel Chat & Pratinjau:
-```powershell
-uv run python -m unittest tests/test_rks_chat.py -v
-```
+---
 
-### Menjalankan Uji Modul Generator RKS & Pencarian Vektor:
-```powershell
-uv run python -m unittest tests/test_rks.py tests/test_rks_search.py -v
-```
+### 1. Manajemen Sesi Percakapan (*Thread Management*)
 
-> **Cakupan Pengujian Otomatis:**
-> * `test_rks_chat.py`: Memastikan bahwa artefak tool pembuatan RKS tidak tertutup oleh teks ringkasan model, penanganan kapasitas penyimpanan disk, dan validasi sumber dokumen lama tidak tertukar.
-> * `test_rks.py`: Validasi pipeline ekstraksi teks terstruktur, penomoran pasal, dan formatting blok tabel.
-> * `test_rks_search.py`: Validasi pencarian semantik dan threshold skor relevansi dokumen.
+Fitur ini berada pada **sidebar sebelah kiri**.
+
+| No | Skenario Pengujian | Langkah Pengujian di Web | Ekspektasi Hasil | Status |
+| :---: | :--- | :--- | :--- | :---: |
+| **1.1** | **Membuat Percakapan Baru** | Klik tombol merah **`➕ New Chat`** di bagian atas sidebar. | Area chat dikosongkan untuk percakapan baru, URL otomatis mendapat `chat_thread` baru, dan sesi baru muncul di daftar *Recent Conversations*. | `[ ]` |
+| **1.2** | **Berpindah Sesi Percakapan** | Klik salah satu judul percakapan pada daftar **`Recent Conversations`**. | Riwayat obrolan dari percakapan yang dipilih langsung termuat kembali dengan pesan dan dokumen sebelumnya tetap utuh. | `[ ]` |
+| **1.3** | **Mengubah Nama Sesi (*Rename*)** | 1. Buka expander **`Pengaturan Tambahan`** di bawah sidebar.<br>2. Buka **`⚙️ Current Session Settings`**.<br>3. Ubah teks pada kolom *Rename Session* (misal: `Uji Coba Tender Tangki`).<br>4. Klik tombol **`Save Name`**. | Judul percakapan pada sidebar langsung berubah sesuai teks baru dan tersimpan secara permanen. | `[ ]` |
+| **1.4** | **Menghapus Sesi Percakapan** | Klik tombol silang **`✕`** di samping nama percakapan pada sidebar, lalu konfirmasi penghapusan pada kotak dialog. | Sesi percakapan terhapus dari daftar. Halaman otomatis mengarahkan ke sesi aktif lainnya atau sesi baru. | `[ ]` |
+| **1.5** | **Uji Persistensi Riwayat** | Kirim pesan dalam obrolan, lalu tekan tombol **Refresh browser (F5)**. | Seluruh pesan obrolan, draf dokumen, dan status tidak hilang setelah halaman dimuat ulang. | `[ ]` |
 
 ---
 
-## 5. Troubleshooting & Solusi Kendala Pengujian
+### 2. 💬 Chatbot AI & RAG Knowledge Retrieval
 
-| Masalah yang Sering Ditemui | Kemungkinan Penyebab | Langkah Solusi |
-| :--- | :--- | :--- |
-| **Chatbot berputar lama / timeout** | Kunci API OpenRouter habis kuota atau model LLM mengalami latensi tinggi. | Periksa saldo OpenRouter di `openrouter.ai` atau ganti `LLM_MODEL_NAME` pada [config.py](config.py) ke model alternatif. |
-| **Error database: `FATAL: password authentication failed`** | Konfigurasi `DATABASE_URL` atau user/password PGVector di `.env` tidak sesuai. | Sesuaikan kredensial di file `.env` dengan PostgreSQL lokal atau gunakan URL Supabase Pooler. |
-| **Google Drive: `Pustaka Google API belum terpasang`** | Paket `google-api-python-client` atau `google-auth-oauthlib` belum ada. | Jalankan `uv pip install google-api-python-client google-auth-oauthlib google-auth-httplib2`. |
-| **Tombol unduh Word (.docx) tidak menghasilkan file** | Folder `./output` belum memiliki izin tulis atau direktori belum dibuat. | Sistem otomatis membuat folder `output/`. Pastikan tidak ada file Word dengan nama yang sama sedang terbuka di aplikasi desktop. |
-| **Gagal ekstraksi file BoQ Excel (.xlsx)** | Format tabel BoQ memiliki format merge cell yang sangat kompleks. | Pastikan file BoQ mencantumkan baris header standar (*Uraian Pekerjaan*, *Volume*, *Satuan*, *Harga Satuan*, *Total*). |
+Pastikan menu navigasi radio di sidebar kiri memilih **`💬 Chatbot & RKS Viewer`**.
+
+| No | Skenario Pengujian | Input / Prompt yang Dimasukkan | Ekspektasi Hasil | Status |
+| :---: | :--- | :--- | :--- | :---: |
+| **2.1** | **Tanya Regulasi Tertentu (RAG Retrieval)** | *"Berapa lama masa sanggah untuk tender pekerjaan konstruksi sesuai pedoman pengadaan Pertamina?"* | 1. Status agen menampilkan proses pemanggilan `fetch_relevant_documents`.<br>2. Jawaban menyertakan rujukan resmi dengan format `📄 Dokumen: Pedoman Pengadaan...`.<br>3. Jawaban terstruktur memuat batas waktu sanggahan yang akurat. | `[ ]` |
+| **2.2** | **Penarikan Draf Dokumen RKS Utuh** | *"Tolong buatkan draf RKS untuk pekerjaan overhaul tangki 041T304"* | 1. Agen memanggil `fetch_full_documents` atau `create_rks_document`.<br>2. Draf struktur RKS ditampilkan lengkap (Lingkup Pekerjaan, Spesifikasi Teknis, Waktu Pelaksanaan). | `[ ]` |
+| **2.3** | **Pencarian Informasi Eksternal / Umum** | *"Berapa estimasi harga acuan pelat baja ASTM A36 terkini di pasar?"* | 1. Agen memanggil tool pencarian `search_tool` (Tavily).<br>2. Menjawab informasi tren/harga pasar dengan menyertakan ringkasan data eksternal. | `[ ]` |
+| **2.4** | **Inspeksi Detail Pemanggilan Tool** | Pada pesan jawaban chatbot yang menggunakan tool, klik expander detail tool (*misal: "⚡ Executed: fetch_relevant_documents"*). | Payload argumen masukan dan keluaran JSON dari tool dapat diinspeksi secara transparan tanpa error. | `[ ]` |
 
 ---
 
-*Panduan pengujian ini dirancang khusus untuk memastikan keandalan, akurasi regulasi, dan kestabilan aplikasi Streamlit Pertamina AI.*
+### 3. Pratinjau & Ekspor Dokumen RKS (.docx)
+
+| No | Skenario Pengujian | Langkah Pengujian di Web | Ekspektasi Hasil | Status |
+| :---: | :--- | :--- | :--- | :---: |
+| **3.1** | **Konversi RKS ke Word via Chat** | Setelah draf RKS tampil di chat, kirim prompt:<br>*"Tolong ubah dokumen RKS tadi ke format Microsoft Word (.docx) agar bisa saya edit"* | 1. Agen menjalankan tool `convert_pdf_to_docx`.<br>2. Muncul **Kartu Unduh Berkas resmi Pertamina** di atas/di dalam pesan obrolan.<br>3. Terdapat tombol **`📥 Unduh File Word (.docx)`** yang langsung mengunduh file `.docx` ke komputer/perangkat Anda. | `[ ]` |
+| **3.2** | **Pratinjau Halaman Visual RKS** | Saat dokumen RKS dibuat atau ditarik oleh chatbot, periksa tab pratinjau halaman di bawah respon atau di panel pratinjau. | Gambar pratinjau halaman visual tertampil jelas dengan nomor halaman yang dapat dinavigasikan (Halaman 1, 2, dst.). | `[ ]` |
+| **3.3** | **Validasi Isi File Word Hasil Unduhan** | Buka berkas `.docx` yang telah diunduh menggunakan Microsoft Word, WPS Office, atau Google Docs. | Dokumen memiliki: Cover resmi berlogo Pertamina, Lembar Pengesahan Pejabat, Daftar Isi otomatis, dan struktur penomoran pasal/tabel yang rapi. | `[ ]` |
+| **3.4** | **Shortcut Konversi PDF Gudang di Sidebar** | 1. Buka expander **`🔄 Convert Any Repository PDF`** di sidebar.<br>2. Pilih salah satu PDF dari dropdown (misal: `RKS-041T304...`).<br>3. Klik **`Open Conversion Popup`** lalu klik tombol proses. | Muncul modal konversi dan menyediakan tombol unduh berkas Word (.docx) secara instan. | `[ ]` |
+
+---
+
+### 4. 📑 Dokumen Tender Generator
+
+Ubah pilihan radio navigasi di sidebar menjadi **`📑 Dokumen Tender Generator`**.
+
+| No | Skenario Pengujian | Langkah Pengujian di Web | Ekspektasi Hasil | Status |
+| :---: | :--- | :--- | :--- | :---: |
+| **4.1** | **Ekstraksi Konteks Dokumen RKS & BoQ** | 1. Pada bagian *Unggah Dokumen Acuan*, unggah file contoh RKS (`.pdf`) atau pilih contoh yang tersedia.<br>2. Unggah file BoQ (`.xlsx` atau `.pdf`).<br>3. Klik tombol **`🔍 Ekstrak Data Tender`**. | Sistem otomatis mengisi kolom formulir: *Nama Pengadaan*, *Estimasi Nilai / Prime Cost*, *Total Biaya*, dan *Kategori Risiko CSMS*. | `[ ]` |
+| **4.2** | **Kelengkapan Isian Formulir Tender** | Lengkapi/sesuaikan parameter proyek pada formulir:<br>- Nomor Tender: `TND-2026-TNK-001`<br>- TKDN Minimal: `30%`<br>- Pejabat Procurement & Pejabat Berwenang<br>- Jadwal Rapat Penjelasan (Pre-bid / Aanwijzing) | Seluruh input formulir tervalidasi dan siap untuk proses pembuatan dokumen lengkap. | `[ ]` |
+| **4.3** | **Eksekusi Pembuatan Dokumen Tender** | Klik tombol utama berwarna merah: **`⚡ Generate Dokumen Tender`**. | 1. Sistem menjalankan AI generation untuk menyusun seluruh bagian tender sesuai pedoman pengadaan:<br>   - Instruksi Kepada Peserta Pengadaan (IKPP 40 butir)<br>   - Syarat Umum Pengadaan (30 artikel)<br>   - Lampiran 2A Matriks Evaluasi Teknis & CSMS<br>   - Rancangan Kontrak 18 pasal & format SP3MK.<br>2. Muncul kotak sukses dan tombol **`📥 Unduh Dokumen Tender (.docx)`**. | `[ ]` |
+| **4.4** | **Penyimpanan Draf Tender** | Buka kembali menu ini setelah berpindah percakapan. | Isian formulir tender yang telah dibuat tetap tersimpan per percakapan dan tidak hilang. | `[ ]` |
+
+---
+
+### 5. 📝 Dokumen Amendemen Generator
+
+Ubah pilihan radio navigasi di sidebar menjadi **`📝 Dokumen Amendemen Generator`**.
+
+| No | Skenario Pengujian | Langkah Pengujian di Web | Ekspektasi Hasil | Status |
+| :---: | :--- | :--- | :--- | :---: |
+| **5.1** | **Pemilihan Kontrak Awal** | Pilih kontrak acuan dari dropdown kontrak atau masukkan nomor kontrak dasar (misal: `SP3MK-2026-001`). | Informasi dasar kontrak (pekerjaan, nilai awal, dan waktu pelaksanaan awal) termuat. | `[ ]` |
+| **5.2** | **Penyusunan Klausul Perubahan** | Masukkan detail perubahan pada formulir:<br>- Justifikasi: Penambahan volume pekerjaan atau perpanjangan waktu kerja akibat kendala operasional lapangan.<br>- Penyesuaian Nilai/Jangka Waktu. | Pokok-pokok perubahan amandemen terangkum dalam format evaluasi formal. | `[ ]` |
+| **5.3** | **Generate & Unduh Dokumen Amandemen** | Klik tombol **`Generate Dokumen Amendemen`**. | Menghasilkan dokumen Pokok-Pokok Amandemen Kontrak format `.docx` yang siap diunduh dan ditandatangani. | `[ ]` |
+
+---
+
+### 6. 📚 Gudang Dokumen (*Document Library*)
+
+Akses menu gudang melalui tautan/tombol di sidebar atau navigasi aplikasi.
+
+| No | Skenario Pengujian | Langkah Pengujian di Web | Ekspektasi Hasil | Status |
+| :---: | :--- | :--- | :--- | :---: |
+| **6.1** | **Gudang RKS (*RKS Library*)** | Buka tampilan **Gudang RKS**. | Menampilkan daftar seluruh dokumen RKS acuan, jumlah halaman, status kelengkapan, dan tombol unduh/pratinjau untuk setiap file. | `[ ]` |
+| **6.2** | **Gudang Kontrak & Amendemen** | Buka tampilan **Gudang Kontrak** atau **Gudang Amendemen**. | Menampilkan riwayat berkas kontrak dan amandemen yang pernah dibuat di aplikasi, lengkap dengan tombol unduh ulang. | `[ ]` |
+
+---
+
+### 7. ☁️ Integrasi Google Drive Knowledge Base
+
+Buka expander **`Pengaturan Tambahan`** > **`☁️ Integrasi Google Drive (RKS Knowledge Base)`** di sidebar sebelah kiri.
+
+| No | Skenario Pengujian | Langkah Pengujian di Web | Ekspektasi Hasil | Status |
+| :---: | :--- | :--- | :--- | :---: |
+| **7.1** | **Pemeriksaan Status Koneksi Akun** | Perhatikan indikator akun Google. | Tertampil status aktif: **`🟢 Terhubung: nathanaelerens@student.ub.ac.id`**. | `[ ]` |
+| **7.2** | **Konfigurasi Folder ID Google Drive** | Periksa kolom Folder ID Google Drive. | Terisi Folder ID default (`1pnz9oBwHcE_mdU0PQnl7j4NoO0LFt8bd`) dengan keterangan waktu sinkronisasi terakhir dan total file terdeteksi. | `[ ]` |
+| **7.3** | **Eksekusi Sinkronisasi Delta Dokumen** | Klik tombol merah **`🔄 Sinkronkan Sekarang`**. | 1. Muncul spinner proses sinkronisasi dokumen dari Google Drive ke database.<br>2. Setelah selesai, tampil 4 kartu metrik hasil: *File Baru*, *Diperbarui*, *Dihapus*, *Tidak Berubah*.<br>3. Dokumen terbaru langsung tersedia untuk pencarian chatbot. | `[ ]` |
+
+---
+
+## 💡 Tips & Catatan Penting Saat Pengujian di Browser
+
+1. **Waktu Respons AI (*Latency*)**:
+   - Untuk pertanyaan regulasi singkat, respons biasanya selesai dalam 3–8 detik.
+   - Untuk pembuatan Dokumen Tender lengkap (*40 butir IKPP + 30 artikel + 18 pasal kontrak*), LLM memerlukan waktu sekitar 20–45 detik karena menyusun naskah dokumen hukum puluhan halaman. Harap menunggu hingga indikator proses selesai.
+2. **Pengunduhan File (.docx)**:
+   - File yang diunduh langsung tersimpan ke folder *Downloads* di perangkat Anda melalui browser tanpa memerlukan aplikasi lokal tambahan.
+3. **Penyimpanan Sesi Percakapan**:
+   - Jika Anda ingin membagikan sesi obrolan yang sedang Anda uji kepada rekan tim, Anda cukup menyalin URL lengkap di bilah alamat browser (yang memuat parameter `?chat_thread=...`).
