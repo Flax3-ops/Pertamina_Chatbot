@@ -275,6 +275,9 @@ def _render_lampiran_b(doc: Document, params: Dict[str, Any], amendment_level: s
     _add_bullet(doc, "v. Pondasi Pompa Drain", indent_inches=0.4, space_after=1)
     _add_bullet(doc, "w. Ruang sampling dan workshop", indent_inches=0.4, space_after=4)
 
+    # Peralihan ke Section Mekanikal, Elektrikal, HSE (Page Break Hal 2 Lampiran B)
+    doc.add_page_break()
+
     # X. Pekerjaan mekanikal dan pemipaan
     _add_bullet(doc, "X. Pekerjaan mekanikal dan pemipaan", indent_inches=0.2, bold=True, space_after=2)
     _add_bullet(doc, "a. Piping – fuel oil/jet A-1 Line (Stainless steel material)", indent_inches=0.4, space_after=1)
@@ -661,10 +664,10 @@ def build_amendment_docx(params: Dict[str, Any]) -> bytes:
     # 1. Page Margins Setup
     sections = doc.sections
     for section in sections:
-        section.top_margin = Inches(1.0)
-        section.bottom_margin = Inches(1.0)
-        section.left_margin = Inches(1.0)
-        section.right_margin = Inches(1.0)
+        section.top_margin = Inches(0.85)
+        section.bottom_margin = Inches(0.85)
+        section.left_margin = Inches(0.9)
+        section.right_margin = Inches(0.9)
 
         # Running Header
         header = section.header
@@ -972,7 +975,8 @@ def build_amendment_docx(params: Dict[str, Any]) -> bytes:
         r.font.name = "Arial"
         r.font.size = Pt(9.5)
 
-    # 5. Kesepakatan Perubahan Preamble
+    # 5. Kesepakatan Perubahan Preamble (Peralihan ke Halaman 2)
+    doc.add_page_break()
     p_agree = doc.add_paragraph()
     p_agree.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     p_agree.paragraph_format.space_before = Pt(8)
@@ -1151,7 +1155,8 @@ def build_amendment_docx(params: Dict[str, Any]) -> bytes:
     r.font.name = "Arial"
     r.font.size = Pt(9.5)
 
-    # IX. Definisi Tanggal Amendemen
+    # IX. Definisi Tanggal Amendemen & Tanda Tangan (Peralihan ke Halaman 3)
+    doc.add_page_break()
     p_ix = doc.add_paragraph()
     p_ix.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     p_ix.paragraph_format.left_indent = Inches(0.4)
