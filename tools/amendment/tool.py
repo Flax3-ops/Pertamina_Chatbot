@@ -107,11 +107,17 @@ class GenerateAmendmentDocumentTool(BaseTool):
             out_path = os.path.abspath(os.path.join("output", filename))
 
             return (
-                f"✅ **Dokumen Amandemen Berhasil Dibuat!**\n\n"
+                f"✅ **Dokumen Amandemen Berhasil Disusun Lengkap!**\n\n"
                 f"- **Pekerjaan**: {extracted['project_name']}\n"
                 f"- **Tingkat**: {lvl}\n"
                 f"- **Referensi Kontrak Induk**: `{extracted['contract_ref']}` ({extracted['contract_date']})\n"
                 f"- **Para Pihak**: {extracted['company_name']} & {extracted['contractor_name']}\n"
+                f"- **Lampiran Resmi Disertakan**:\n"
+                f"  1. **Lampiran B-I**: Lingkup Pekerjaan (Pekerjaan Persiapan, Sipil & Struktur, Mekanikal & Pemipaan, Elektrikal, HSE)\n"
+                f"  2. **Lampiran C-I**: Harga Kontrak & Ketentuan Pembayaran (Tabel Rekapitulasi Material, Jasa, Margin Risiko 8%, Total, Pembulatan)\n"
+                f"  3. **Lampiran D-II**: Jangka Waktu & Jadwal Pelaksanaan Pekerjaan (MPP {extracted.get('mpp_hari', 839)} hari, MPL {extracted.get('mpl_hari', 749)} hari, MPA {extracted.get('mpa_hari', 90)} hari)\n"
+                f"  4. **Lampiran G-II**: Dokumen Pengadaan & Berita Acara Klarifikasi / Negosiasi\n"
+                f"  5. **Halaman Pembatas Resmi**: Lembar Divider 'LAMPIRAN AMENDEMEN'\n"
                 f"- **File DOCX Tersimpan**: `{filename}` di folder `./output/`\n"
                 f"- **ID Arsip Database**: `{amend_id[:8]}` (tersedia di menu Gudang Dokumen Amandemen)\n\n"
                 f"Dokumen telah disusun mengikuti format baku Pokok-Pokok Kontrak Amandemen Pertamina Patra Niaga."

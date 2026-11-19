@@ -148,6 +148,19 @@ def render_amendment_generator_page() -> None:
             tanggal_berlaku = st.text_input("Tanggal Mulai Berlaku Amendemen", value=extracted["tanggal_berlaku_amendemen"], key="amend_inp_tgl_berlaku")
 
         st.divider()
+        st.markdown("**Jadwal Pelaksanaan & Lampiran (Lampiran D-II)**")
+        c_time1, c_time2, c_time3 = st.columns(3)
+        with c_time1:
+            mpp_hari = st.number_input("Masa Penyelesaian Pekerjaan (MPP) Hari", value=int(extracted.get("mpp_hari", 839)), step=1, key="amend_inp_mpp_hari")
+            mpl_hari = st.number_input("Masa Penyelesaian Lingkup (MPL) Hari", value=int(extracted.get("mpl_hari", 749)), step=1, key="amend_inp_mpl_hari")
+        with c_time2:
+            mpa_hari = st.number_input("Masa Penyelesaian Adm (MPA) Hari", value=int(extracted.get("mpa_hari", 90)), step=1, key="amend_inp_mpa_hari")
+            mpl_tanggal = st.text_input("Target Selesai MPL", value=extracted.get("mpl_tanggal", "01 April 2026"), key="amend_inp_mpl_tgl")
+        with c_time3:
+            mpa_tanggal = st.text_input("Target Selesai MPA", value=extracted.get("mpa_tanggal", "30 Juni 2026"), key="amend_inp_mpa_tgl")
+            tanggal_akhir_kontrak = st.text_input("Tanggal Berakhir Kontrak", value=extracted.get("tanggal_akhir_kontrak", "25 Juni 2027"), key="amend_inp_tgl_akhir_kontrak")
+
+        st.divider()
         st.markdown("**Klausul Perubahan & Dokumen Acuan**")
         dasar_dokumen_text = st.text_area(
             "Dasar Perubahan (Surat / Notulen / Berita Acara - satu per baris)",
@@ -162,7 +175,7 @@ def render_amendment_generator_page() -> None:
 
     # 3. Tombol Eksekusi Generate
     if st.button("🚀 Generate Dokumen Amandemen", key="btn_run_generate_amendment", type="primary", use_container_width=True):
-        with st.spinner("Menyusun dokumen amandemen resmi berbasis format pokok-pokok kontrak..."):
+        with st.spinner("Menyusun dokumen amandemen resmi berbasis format pokok-pokok kontrak dan lampiran lengkap..."):
             dasar_list = [line.strip() for line in dasar_dokumen_text.splitlines() if line.strip()]
             params_to_build = {
                 "project_name": project_name.strip(),
@@ -188,6 +201,12 @@ def render_amendment_generator_page() -> None:
                 "tambahan_pekerjaan": tambahan_pekerjaan.strip() if tambahan_pekerjaan.strip() else None,
                 "dasar_dokumen": dasar_list if dasar_list else extracted["dasar_dokumen"],
                 "portal_autentifikasi": extracted["portal_autentifikasi"],
+                "mpp_hari": mpp_hari,
+                "mpl_hari": mpl_hari,
+                "mpa_hari": mpa_hari,
+                "mpl_tanggal": mpl_tanggal.strip(),
+                "mpa_tanggal": mpa_tanggal.strip(),
+                "tanggal_akhir_kontrak": tanggal_akhir_kontrak.strip(),
             }
 
             try:
