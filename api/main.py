@@ -30,6 +30,12 @@ load_dotenv()
 HOST = os.getenv("FASTAPI_HOST", "127.0.0.1")
 PORT = int(os.getenv("FASTAPI_PORT", "8000"))
 
+# Comma-separated list of allowed browser origins, e.g.
+# "https://pertamina-chatbot.vercel.app,http://localhost:5173". Default "*".
+CORS_ORIGINS = [o.strip().rstrip("/") for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()] or ["*"]
+# Optional regex for Vercel preview deployments, e.g. r"https://.*\.vercel\.app".
+CORS_ORIGIN_REGEX = os.getenv("CORS_ORIGIN_REGEX") or None
+
 app = FastAPI(
     title="Pertamina Tender Generator API",
     description="Dedicated API service to generate formal Dokumen Tender and Contract Amendments based on Pertamina Procurement Guidelines.",
@@ -42,7 +48,8 @@ app.include_router(gdrive_router)
 # Enable CORS for Streamlit / Frontend access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
+    allow_origin_regex=CORS_ORIGIN_REGEX,
     # This API does not use cookie-based authentication. Browsers reject
     # wildcard origins when credentialed requests are enabled.
     allow_credentials=False,
@@ -312,7 +319,8 @@ def download_file(filename: str):
 
 if __name__ == "__main__":
     import uvicorn
-    print(f"🚀 Starting Pertamina Tender Generator API on http://{HOST}:{PORT}")
+    # Plain ASCII: Windows consoles using cp1252 crash on emoji output.
+    print(f"Starting Pertamina Tender Generator API on http://{HOST}:{PORT}")
     uvicorn.run(
         "api.main:app",
         host=HOST,
