@@ -1,0 +1,16 @@
+.chat-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.chat-error-banner {
+  background: rgba(239, 83, 80, 0.12);
+  border-bottom: 1px solid rgba(239, 83, 80, 0.3);
+  color: #ef8e8c;
+  font-size: 13px;
+  padding: 10px 20px;
+  text-align: center;
+  flex-shrink: 0;
+}

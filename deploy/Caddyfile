@@ -1,0 +1,16 @@
+{$API_DOMAIN} {
+	encode gzip
+
+	# Upload RKS/BOQ
+	request_body {
+		max_size 50MB
+	}
+
+	# Chat agent & generate tender bisa berjalan > 2 menit (frontend timeout 180 s).
+	reverse_proxy backend:8000 {
+		transport http {
+			read_timeout 300s
+			write_timeout 300s
+		}
+	}
+}

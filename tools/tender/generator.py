@@ -12,8 +12,12 @@ from dotenv import load_dotenv
 from langchain_core.messages import SystemMessage
 from langchain_openrouter import ChatOpenRouter
 
-from tender.schema import DOKUMEN_TENDER_JSON_SCHEMA, DokumenTenderData
-from tender.docx import render_tender_to_docx
+try:
+    from tools.tender.schema import DOKUMEN_TENDER_JSON_SCHEMA, DokumenTenderData
+    from tools.tender.docx import render_tender_to_docx
+except ModuleNotFoundError:
+    from .schema import DOKUMEN_TENDER_JSON_SCHEMA, DokumenTenderData
+    from .docx import render_tender_to_docx
 
 load_dotenv()
 

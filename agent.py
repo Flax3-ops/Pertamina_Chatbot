@@ -12,11 +12,14 @@ import config
 from dotenv import load_dotenv
 import os
 import re
+import json
 from langchain_tavily import TavilySearch
 from langchain_core.tools import tool
 from rag.vector_store import fetch_full_document, fetch_relevant_documents
 from langgraph.prebuilt import ToolNode, tools_condition, InjectedState
 from tools.docx_exporter import parse_text_to_rks_data, render_to_docx
+from tools.rks.service import create_document
+from tools.amendment.tool import GenerateAmendmentDocumentTool
 import psycopg
 
 load_dotenv()
@@ -83,7 +86,15 @@ def convert_pdf_to_docx(state: Annotated[dict, InjectedState], target_pdf_name: 
     # 2. If target_pdf_name is provided or doc_content is empty, query PostgreSQL
     if not doc_content and target_pdf_name:
         try:
-            with psycopg.connect("dbname=langchain user=langchain password=langchain host=127.0.0.1 connect_timeout=5") as conn:
+            db_url = os.getenv("DATABASE_URL")
+            conn_args = {"conninfo": db_url} if db_url else {
+                "host": os.getenv("PGVECTOR_HOST", "127.0.0.1"),
+                "port": int(os.getenv("PGVECTOR_PORT", "5432")),
+                "dbname": os.getenv("PGVECTOR_DB", "langchain"),
+                "user": os.getenv("PGVECTOR_USER", "langchain"),
+                "password": os.getenv("PGVECTOR_PASSWORD", "langchain"),
+            }
+            with psycopg.connect(**conn_args, connect_timeout=5) as conn:
                 with conn.cursor() as cur:
                     cur.execute(
                         "SELECT title, full_content FROM documents WHERE title ILIKE %s LIMIT 1;",
@@ -112,14 +123,16 @@ def convert_pdf_to_docx(state: Annotated[dict, InjectedState], target_pdf_name: 
         final_title = rks_data.get("cover_page", {}).get("judul_pekerjaan", doc_title)
         num_babs = len(rks_data.get("bab", []))
 
-        return (
-            f"Successfully converted document to DOCX format!\n"
-            f"- Title: {final_title}\n"
-            f"- Structured Chapters: {num_babs} BAB\n"
-            f"- Converted Word Document: {filename}\n"
-            f"- Path: {output_path}\n"
-            f"The document includes official Pertamina cover page, lembar pengesahan, daftar isi, and structured chapters."
-        )
+        download_url = f"/api/download/{filename}"
+        return json.dumps({
+            "status": "success",
+            "message": "Dokumen berhasil dikonversi ke format Word (.docx) resmi Pertamina.",
+            "title": final_title,
+            "filename": filename,
+            "chapters_count": num_babs,
+            "download_url": download_url,
+            "path": output_path
+        }, ensure_ascii=False)
     except Exception as e:
         return f"Failed to convert document to DOCX: {str(e)}"
 
@@ -144,7 +157,8 @@ def agent_node(state: AgentState) -> dict:
         content=(
             """ 
     <role_and_objective>
-Anda adalah Asisten AI Cerdas resmi untuk Basis Pengetahuan Pengadaan PT Pertamina (Persero). Tugas utama Anda adalah membantu staf dan tim pengadaan dalam menavigasi regulasi, menganalisis klausul tender, menyusun dokumen pengadaan (seperti RKS, Kerangka Acuan Kerja/TOR, HPS, dan Berita Acara), serta memfasilitasi ekspor dokumen.
+Anda adalah Asisten AI Cerdas resmi untuk Basis Pengetahuan Pengadaan PT Pertamina (Persero). Tugas utama Anda adalah membantu staf dan tim pengadaan dalam menavigasi regulasi, menganalisis klausul tender, menyusun dokumen pengadaan (seperti RKS, Dokumen Tender dan Rancangan Kontrak, serta Amandemen), serta memfasilitasi ekspor dokumen.
+Anda juga dilengkapi dengan kemampuan untuk searching, sehingga anda bisa menjawab pertanyaan umum juga.
 </role_and_objective>
 
 <tools_and_routing_logic>
@@ -168,7 +182,13 @@ Gunakan tools yang tersedia sesuai aturan ketat berikut:
 2. Objektif dan Terstruktur:
    - Gunakan penomoran atau poin-poin yang terstruktur rapi untuk penjelasan pasal atau klausul teknis.
    - Jangan berasumsi atau mengarang regulasi jika informasi tidak ditemukan di dokumen resmi.
-3. Penutupan Proaktif (Call to Action):
+3. Tautan Unduhan Dokumen Wajib:
+   - Saat memanggil `convert_pdf_to_docx`, Anda WAJIB menyertakan tautan download markdown aktif menggunakan path download_url yang dikembalikan tool:
+     `[📥 Unduh <filename>](/api/download/<filename>)`
+   - Saat memanggil `create_rks_document`, Anda WAJIB menyertakan tautan download dokumen Word dan pratinjau:
+     `[📥 Unduh Dokumen RKS (.docx)](/api/rks/<artifact_id>/document.docx)`
+     `[👁️ Pratinjau Dokumen PDF](/api/rks/<artifact_id>/preview.pdf)`
+4. Penutupan Proaktif (Call to Action):
    - Di setiap akhir respon, berikan kalimat penutup yang menawarkan langkah logis berikutnya secara ramah (misalnya: penawaran konversi ke format .docx, bedah pasal tertentu, atau penyusunan lampiran teknis).
 </response_guidelines>
 
@@ -208,11 +228,12 @@ Draf di atas telah disusun sesuai format standar. Apakah draf ini sudah sesuai d
 
 ### CONTOH 3: Permintaan Konversi File
 User: "Tolong ubah dokumen RKS tadi ke format Word biar bisa saya edit."
-Action: Panggil tool `convert_pdf_to_docx(document_id="...")`
+Action: Panggil tool `convert_pdf_to_docx(target_pdf_name="...")`
 Response:
-"Dokumen RKS pengadaan jasa katering telah berhasil dikonversi ke format Microsoft Word (.docx) resmi.
+"Dokumen RKS pengadaan jasa katering telah berhasil dikonversi ke format Microsoft Word (.docx) resmi Pertamina.
 
-Unduh file Anda di sini: [RKS_Pengadaan_Jasa_Katering_Rev01.docx]
+Silakan unduh berkas Anda melalui tautan berikut:
+[📥 Unduh RKS_Pengadaan_Jasa_Katering_Rev01.docx](/api/download/RKS_Pengadaan_Jasa_Katering_Rev01.docx)
 
 Apakah ada lampiran spesifikasi teknis atau rincian HPS yang perlu kita lengkapi ke dalam dokumen tersebut selanjutnya?"
 </few_shot_examples>

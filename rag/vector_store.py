@@ -1,42 +1,69 @@
+import os
+from typing import Optional, Dict, Any, List
+from dotenv import load_dotenv
+import psycopg
 from langchain_postgres import PGVector
 from langchain_huggingface import HuggingFaceEmbeddings
-import config
 from langchain_core.tools import tool
-import psycopg
-from dotenv import load_dotenv
-from typing import Optional, Dict, Any, List
-import os
+import config
 
 load_dotenv()
 
-embeddings = OpenAIEmbeddings(
-            model=config.EMBEDDING_MODEL,
-            openai_api_key=os.getenv('OPENROUTER_API_KEY'),
-            openai_api_base="https://openrouter.ai/api/v1",
-            tiktoken_enabled=False,
-            )
-connection = "postgresql+psycopg://langchain:langchain@127.0.0.1:5432/langchain"  # Uses psycopg3!
-vector_store = PGVector(
-    embeddings=embeddings,
-    collection_name="knowledge_base",
-    connection=connection,
-)
+PGVECTOR_HOST = os.getenv("PGVECTOR_HOST", "127.0.0.1")
+PGVECTOR_PORT = int(os.getenv("PGVECTOR_PORT", "5432"))
+PGVECTOR_USER = os.getenv("PGVECTOR_USER", "langchain")
+PGVECTOR_PASSWORD = os.getenv("PGVECTOR_PASSWORD", "langchain")
+PGVECTOR_DB = os.getenv("PGVECTOR_DB", "langchain")
 
+
+def get_connection_string() -> str:
+    """Returns sqlalchemy-compatible connection string for PGVector (psycopg3)."""
+    db_url = os.getenv("DATABASE_URL")
+    if db_url:
+        if db_url.startswith("postgres://"):
+            return db_url.replace("postgres://", "postgresql+psycopg://", 1)
+        elif db_url.startswith("postgresql://"):
+            return db_url.replace("postgresql://", "postgresql+psycopg://", 1)
+        return db_url
+    return f"postgresql+psycopg://{PGVECTOR_USER}:{PGVECTOR_PASSWORD}@{PGVECTOR_HOST}:{PGVECTOR_PORT}/{PGVECTOR_DB}"
+
+
+def get_raw_psycopg_connection():
+    """Returns a direct psycopg connection for relational queries."""
+    db_url = os.getenv("DATABASE_URL")
+    if db_url:
+        return psycopg.connect(db_url, connect_timeout=10)
+    return psycopg.connect(
+        host=PGVECTOR_HOST,
+        port=PGVECTOR_PORT,
+        dbname=PGVECTOR_DB,
+        user=PGVECTOR_USER,
+        password=PGVECTOR_PASSWORD,
+        connect_timeout=10,
+    )
+
+
+# Connection string and vector store (initialized lazily to avoid import-time crashes)
+connection = get_connection_string()
 _vector_store = None
+vector_store = None
 
 
 def _get_vector_store():
     """Connect to PostgreSQL only when a retrieval tool is actually used."""
     global _vector_store
     if _vector_store is None:
-        embeddings = HuggingFaceEmbeddings(model_name=config.EMBEDDING_MODEL,
-                                          model_kwargs={"local_files_only": True})
+        embeddings = HuggingFaceEmbeddings(
+            model_name=config.EMBEDDING_MODEL,
+            model_kwargs={"local_files_only": True}
+        )
         _vector_store = PGVector(
             embeddings=embeddings,
             collection_name="knowledge_base",
-            connection=connection,
+            connection=get_connection_string(),
         )
     return _vector_store
+
 
 def fetch_full_document(user_query: str) -> Dict[str, Any]:
     """Finds and returns the full document content matching the user query along with its title and metadata.
@@ -44,12 +71,13 @@ def fetch_full_document(user_query: str) -> Dict[str, Any]:
     """
     try:
         results = _get_vector_store().similarity_search_with_relevance_scores(user_query, k=1)
-    except Exception:
-        return {"title": "Sumber tidak ditemukan", "full_docs": "Layanan pencarian tidak tersedia.", "error": True}
+    except Exception as e:
+        return {"title": "Sumber tidak ditemukan", "full_docs": f"Layanan pencarian tidak tersedia: {str(e)}", "error": True}
+
     if not results or results[0][1] < config.RKS_SEARCH_SCORE_THRESHOLD:
         return {"title": "Sumber tidak ditemukan", "full_docs": "Tidak ada dokumen yang memenuhi ambang kecocokan.", "error": True}
 
-    # 3. Safely extract metadata
+    # Extract metadata
     doc_id: Optional[str] = results[0][0].metadata.get("document_id")
     file_name: str = results[0][0].metadata.get("file_name", "Untitled Document")
 
@@ -60,21 +88,13 @@ def fetch_full_document(user_query: str) -> Dict[str, Any]:
             "error": True
         }
 
-    # 4. Fetch title & full text from SQL database
-    connection_string = "dbname=langchain user=langchain password=langchain host=127.0.0.1"
-    
+    # Fetch title & full text from SQL database
     try:
-        with psycopg.connect(
-            host=PGVECTOR_HOST,
-            port=PGVECTOR_PORT,
-            dbname=PGVECTOR_DB,
-            user=PGVECTOR_USER,
-            password=PGVECTOR_PASSWORD,
-        ) as conn:
+        with get_raw_psycopg_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT title, full_content FROM documents WHERE id = %s", (doc_id,))
                 row = cursor.fetchone()
-                
+
                 if row and row[1]:
                     doc_title = row[0] or file_name
                     return {
@@ -98,6 +118,7 @@ def fetch_full_document(user_query: str) -> Dict[str, Any]:
             "full_docs": f"Database query failed: {str(e)}",
             "error": True
         }
+
 
 @tool
 def fetch_relevant_documents(query: str, top_k: int = 3,
