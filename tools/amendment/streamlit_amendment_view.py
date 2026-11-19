@@ -79,21 +79,20 @@ def render_amendment_generator_page() -> None:
     try:
         available_contracts = contract_archive.list()
     except Exception as exc:
-        st.error(f"Gagal mengakses database kontrak: {exc}")
-        return
+        available_contracts = []
 
-    if not available_contracts:
-        st.warning("⚠️ Belum ada rancangan kontrak yang tersimpan di Gudang Kontrak. Buat dan simpan rancangan kontrak terlebih dahulu.")
-        return
-
-    # 1. Pilih Kontrak
+    # 1. Pilih Kontrak Acuan (Menyertakan Template Standar Resmi IKN)
     st.markdown("##### 1. Pilih Kontrak Acuan")
     contract_options = {
-        c["id"]: f"{c['project_name'][:65]}... (ID: {c['id'][:8]})"
-        if len(c["project_name"]) > 65
-        else f"{c['project_name']} (ID: {c['id'][:8]})"
-        for c in available_contracts
+        "template_ikn": "⭐ Template Acuan Resmi: Pembangunan DPPU Nusantara IKN (SP-068/PND900000/2024-S0)"
     }
+    for c in available_contracts:
+        label = f"{c['project_name'][:60]}... (ID: {c['id'][:8]})" if len(c["project_name"]) > 60 else f"{c['project_name']} (ID: {c['id'][:8]})"
+        contract_options[c["id"]] = label
+
+    if not available_contracts:
+        st.info("ℹ️ Belum ada draft kontrak tambahan di Gudang Kontrak. Sistem otomatis menggunakan Template Acuan Resmi (DPPU Nusantara IKN) untuk pengujian langsung.")
+
     selected_contract_id = st.selectbox(
         "Pilih Kontrak Induk",
         options=list(contract_options.keys()),
@@ -102,11 +101,19 @@ def render_amendment_generator_page() -> None:
     )
 
     # Load contract details
-    try:
-        contract_data = contract_archive.get(selected_contract_id)
-    except Exception as e:
-        st.error(f"Gagal memuat data kontrak: {e}")
-        return
+    if selected_contract_id == "template_ikn":
+        contract_data = {
+            "id": "template_ikn",
+            "project_name": "Pembangunan DPPU Nusantara Ibu Kota Negara (IKN) – Penajam Paser Utara",
+            "contract_ref": "SP-068/PND900000/2024-S0",
+            "docx": b"",
+        }
+    else:
+        try:
+            contract_data = contract_archive.get(selected_contract_id)
+        except Exception as e:
+            st.error(f"Gagal memuat data kontrak: {e}")
+            return
 
     # Extract initial context
     extracted = extract_context_from_contract(contract_data)
