@@ -900,9 +900,9 @@ with st.sidebar:
             with st.expander("🔄 Convert Any Repository PDF", expanded=False):
                 st.caption("Select any PDF from the repository database to convert via popup dialog:")
                 pdf_options = {p.name: str(p.resolve()) for p in all_repo_pdfs}
-                selected_pdf_name = st.selectbox("Choose PDF", list(pdf_options.keys()), key="sidebar_pdf_selector")
-                if st.button("Open Conversion Popup", key="btn_open_sidebar_dialog", use_container_width=True):
-                    open_pdf_converter_dialog(pdf_options[selected_pdf_name], selected_pdf_name)
+                selected_pdf_name = st.selectbox("Choose PDF", list(pdf_options.keys()), key="sidebar_pdf_selector_settings")
+                if st.button("Open Conversion Popup", key="btn_open_sidebar_dialog_settings", use_container_width=True):
+                    open_pdf_converter_dialog(doc_title=selected_pdf_name, pdf_path=pdf_options[selected_pdf_name])
 
         # 4. Converted Documents Element
         output_dir = Path("./output")
