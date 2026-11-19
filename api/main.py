@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
 from tools.tender.generator import generate_tender_document, export_tender_to_docx, _active_tender_store
-from tools.tender.extractor import extract_rks_info, extract_boq_info
+from tools.tender.extractor import extract_rks_info, extract_boq_info, extract_dp3_info
 from tools.tender.docx import OUTPUT_DIR
 from tools.tender.docx import render_contract_to_docx_bytes
 from tools.tender.contract_archive import ContractArchive
@@ -120,12 +120,19 @@ async def extract_context(
     rks_filepath: Optional[str] = Form(None),
     boq_file: Optional[UploadFile] = File(None),
     rks_artifact_id: Optional[str] = Form(None),
+    dp3_files: Optional[List[UploadFile]] = File(None),
 ):
     """
-    Extracts project metadata, CSMS risk, scope of work, and HPS from RKS and/or BOQ files.
+    Extracts project metadata, CSMS risk, scope of work, HPS, and DP3 supporting documents from uploaded files.
     """
     rks_data: Dict[str, Any] = {}
     boq_data: Dict[str, Any] = {}
+    dp3_data: Dict[str, Any] = {
+        "files_processed": [],
+        "files_skipped": [],
+        "dp3_summary": "",
+        "dp3_file_summaries": [],
+    }
 
     # 1. Process RKS
     if rks_file and rks_file.filename:
@@ -159,12 +166,40 @@ async def extract_context(
         content = await boq_file.read()
         boq_data = extract_boq_info(content, filename=boq_file.filename)
 
+    # 3. Process DP3 (Dokumen Pendukung Pemilihan Pengadaan)
+    if dp3_files:
+        dp3_tuples = []
+        for f in dp3_files:
+            if f and f.filename:
+                raw_bytes = await f.read()
+                dp3_tuples.append((f.filename, raw_bytes))
+        if dp3_tuples:
+            dp3_data = extract_dp3_info(dp3_tuples)
+
+            # Fallback for BOQ: if boq_file was omitted, auto-extract from DP3 if an excel BOQ exists
+            if not boq_data:
+                for fname, raw_bytes in dp3_tuples:
+                    lower_name = fname.lower()
+                    if any(k in lower_name for k in ["boq", "rab", "bill_of_quantity"]) and any(lower_name.endswith(ext) for ext in [".xlsx", ".xls"]):
+                        try:
+                            boq_data = extract_boq_info(raw_bytes, filename=fname)
+                            break
+                        except Exception:
+                            pass
+
     # Merge context summaries
     context_parts = []
     if rks_data.get("context_summary"):
         context_parts.append(rks_data["context_summary"])
     if boq_data.get("summary"):
         context_parts.append(boq_data["summary"])
+    base_summary = "\n\n".join(context_parts)
+
+    full_context_parts = list(context_parts)
+    if dp3_data.get("dp3_summary"):
+        full_context_parts.append(f"--- DOKUMEN PENDUKUNG (DP3) ---\n{dp3_data['dp3_summary']}")
+
+    dp3_issues = [f"{s['filename']}: {s['reason']}" for s in dp3_data.get("files_skipped", [])]
 
     return {
         "status": "success",
@@ -175,9 +210,14 @@ async def extract_context(
         "prime_cost": boq_data.get("prime_cost"),
         "total_dengan_kr": boq_data.get("total_dengan_kr"),
         "boq_items": boq_data.get("items", []),
-        "combined_context_summary": "\n\n".join(context_parts),
+        "base_context_summary": base_summary,
+        "combined_context_summary": "\n\n".join(full_context_parts),
         "sources": {**rks_data.get("sources", {}), **boq_data.get("sources", {})},
-        "issues": rks_data.get("issues", []) + boq_data.get("issues", []),
+        "issues": rks_data.get("issues", []) + boq_data.get("issues", []) + dp3_issues,
+        "dp3_summary": dp3_data.get("dp3_summary", ""),
+        "dp3_file_summaries": dp3_data.get("dp3_file_summaries", []),
+        "dp3_files_processed": dp3_data.get("files_processed", []),
+        "dp3_files_skipped": dp3_data.get("files_skipped", []),
     }
 
 

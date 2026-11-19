@@ -1,5 +1,18 @@
-import React, { useState } from 'react'
-import { Upload, FileText, ClipboardList, AlertCircle, CheckCircle, Download, Loader2 } from 'lucide-react'
+import React, { useState, useRef } from 'react'
+import {
+  Upload,
+  FileText,
+  ClipboardList,
+  AlertCircle,
+  CheckCircle,
+  Download,
+  Loader2,
+  FolderOpen,
+  FolderPlus,
+  Trash2,
+  X,
+  RotateCcw,
+} from 'lucide-react'
 import { tenderService, getErrorMessage } from '../services/api'
 import './FormPage.css'
 
@@ -17,6 +30,15 @@ export default function TenderPage() {
   const [step, setStep] = useState(1) // 1=upload, 2=form, 3=result
   const [rksFile, setRksFile] = useState(null)
   const [boqFile, setBoqFile] = useState(null)
+  const [dp3Files, setDp3Files] = useState([])
+
+  // DP3 extraction results & state
+  const [dp3Summary, setDp3Summary] = useState('')
+  const [savedDp3Summary, setSavedDp3Summary] = useState('')
+  const [dp3FilesProcessed, setDp3FilesProcessed] = useState([])
+  const [dp3FilesSkipped, setDp3FilesSkipped] = useState([])
+  const [baseContextSummary, setBaseContextSummary] = useState('')
+
   const [extracting, setExtracting] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState(null)
@@ -58,7 +80,20 @@ export default function TenderPage() {
       const fd = new FormData()
       if (rksFile) fd.append('rks_file', rksFile)
       if (boqFile) fd.append('boq_file', boqFile)
+      if (dp3Files && dp3Files.length > 0) {
+        dp3Files.forEach(f => fd.append('dp3_files', f))
+      }
+
       const data = await tenderService.extractContext(fd)
+
+      const dp3Text = data.dp3_summary || ''
+      const baseText = data.base_context_summary || ''
+      setDp3Summary(dp3Text)
+      setSavedDp3Summary(dp3Text)
+      setDp3FilesProcessed(data.dp3_files_processed || [])
+      setDp3FilesSkipped(data.dp3_files_skipped || [])
+      setBaseContextSummary(baseText)
+
       setForm(f => ({
         ...f,
         nama_pengadaan: data.nama_pengadaan || f.nama_pengadaan,
@@ -76,6 +111,32 @@ export default function TenderPage() {
     } finally {
       setExtracting(false)
     }
+  }
+
+  // Handle manual edits to DP3 summary in Step 2
+  const handleEditDp3Summary = (newVal) => {
+    setDp3Summary(newVal)
+    const combined = newVal.trim()
+      ? `${baseContextSummary}\n\n--- DOKUMEN PENDUKUNG (DP3) ---\n${newVal.trim()}`
+      : baseContextSummary
+    setForm(f => ({ ...f, context_summary: combined }))
+  }
+
+  // Dismiss / remove DP3 context from tender document
+  const handleRemoveDp3 = () => {
+    setDp3Summary('')
+    setDp3FilesProcessed([])
+    setDp3FilesSkipped([])
+    setForm(f => ({ ...f, context_summary: baseContextSummary }))
+  }
+
+  // Restore DP3 context if user dismissed it by mistake
+  const handleRestoreDp3 = () => {
+    setDp3Summary(savedDp3Summary)
+    const combined = savedDp3Summary.trim()
+      ? `${baseContextSummary}\n\n--- DOKUMEN PENDUKUNG (DP3) ---\n${savedDp3Summary.trim()}`
+      : baseContextSummary
+    setForm(f => ({ ...f, context_summary: combined }))
   }
 
   const handleGenerate = async (e) => {
@@ -107,7 +168,9 @@ export default function TenderPage() {
         </div>
         <div>
           <h1 className="form-page-title">Generate Dokumen Tender</h1>
-          <p className="form-page-subtitle">Unggah RKS & BOQ untuk membuat Dokumen Tender Pertamina secara otomatis</p>
+          <p className="form-page-subtitle">
+            Unggah RKS, BOQ, dan Dokumen Pendukung (DP3) untuk membuat Dokumen Tender Pertamina secara otomatis
+          </p>
         </div>
       </div>
 
@@ -135,15 +198,18 @@ export default function TenderPage() {
       {step === 1 && (
         <div className="form-card">
           <div className="upload-grid">
-            <DropZone label="File RKS (PDF / DOCX)" file={rksFile} onChange={setRksFile} />
-            <DropZone label="File BOQ (PDF / Excel)" file={boqFile} onChange={setBoqFile} optional />
+            <DropZone label="1. File RKS (PDF / DOCX) *" file={rksFile} onChange={setRksFile} required />
+            <DropZone label="2. File BOQ (PDF / Excel)" file={boqFile} onChange={setBoqFile} optional />
           </div>
+
+          <Dp3DropZone files={dp3Files} onChange={setDp3Files} />
+
           <button
             className="primary-btn"
             onClick={handleExtract}
             disabled={!rksFile || extracting}
           >
-            {extracting ? <><Loader2 size={15} className="spin" /> Mengekstrak…</> : 'Lanjut →'}
+            {extracting ? <><Loader2 size={15} className="spin" /> Mengekstrak Konteks…</> : 'Lanjut →'}
           </button>
         </div>
       )}
@@ -151,6 +217,81 @@ export default function TenderPage() {
       {/* Step 2: Form */}
       {step === 2 && (
         <form className="form-card" onSubmit={handleGenerate}>
+          {/* DP3 Summary Accordion Card */}
+          {dp3Summary ? (
+            <details className="dp3-summary-card" open>
+              <summary className="dp3-summary-header">
+                <div className="dp3-summary-title">
+                  <FolderOpen size={18} className="dp3-icon" />
+                  <span>
+                    Dokumen Pendukung (DP3) Terintegrasi ({dp3FilesProcessed.length || 'Berkas'} dokumen)
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="dp3-dismiss-btn"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    handleRemoveDp3()
+                  }}
+                  title="Hapus konteks DP3 dari Dokumen Tender"
+                >
+                  <Trash2 size={13} /> Hapus Konteks DP3
+                </button>
+              </summary>
+
+              <div className="dp3-summary-content">
+                {dp3FilesProcessed.length > 0 && (
+                  <div className="dp3-files-list">
+                    <span className="dp3-sublabel">Berkas terbaca:</span>
+                    <div className="dp3-badge-list">
+                      {dp3FilesProcessed.map((file, idx) => (
+                        <span key={idx} className="dp3-file-badge" title={file.snippet || file.filename}>
+                          <FileText size={12} />
+                          <span className="dp3-badge-name">{file.filename}</span>
+                          <span className="dp3-badge-size">({file.size_kb} KB)</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {dp3FilesSkipped?.length > 0 && (
+                  <div className="dp3-skipped-box">
+                    <span className="dp3-skipped-title">⚠️ {dp3FilesSkipped.length} berkas dilewati (format tidak didukung):</span>
+                    <ul className="dp3-skipped-list">
+                      {dp3FilesSkipped.map((s, idx) => (
+                        <li key={idx}><strong>{s.filename}</strong>: {s.reason}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <div className="dp3-extracted-text">
+                  <label className="field-label">Poin Kunci Dokumen Pendukung (DP3) yang Ditemukan AI:</label>
+                  <textarea
+                    className="field-input field-textarea dp3-textarea"
+                    value={dp3Summary}
+                    onChange={(e) => handleEditDp3Summary(e.target.value)}
+                    rows={6}
+                    placeholder="Poin-poin spesifikasi teknis, kualifikasi, atau HSSE dari dokumen DP3..."
+                  />
+                  <small className="field-hint">
+                    Poin ini otomatis dimasukkan ke dalam Lampiran 2A (Kriteria Evaluasi Teknis) dan Pasal 2 (Lingkup Pekerjaan). Anda dapat mengedit teks di atas sesuai kebutuhan.
+                  </small>
+                </div>
+              </div>
+            </details>
+          ) : savedDp3Summary ? (
+            <div className="dp3-dismissed-banner">
+              <span>Konteks DP3 telah dinonaktifkan untuk dokumen tender ini.</span>
+              <button type="button" className="dp3-restore-btn" onClick={handleRestoreDp3}>
+                <RotateCcw size={13} /> Pulihkan Konteks DP3
+              </button>
+            </div>
+          ) : null}
+
           <div className="form-grid">
             <FieldGroup label="Nama Pengadaan *">
               <input className="field-input" value={form.nama_pengadaan} onChange={e => setField('nama_pengadaan', e.target.value)} required />
@@ -253,7 +394,7 @@ export default function TenderPage() {
 }
 
 function DropZone({ label, file, onChange, optional }) {
-  const inputRef = React.useRef(null)
+  const inputRef = useRef(null)
   return (
     <div
       className={`drop-zone ${file ? 'has-file' : ''}`}
@@ -275,7 +416,129 @@ function DropZone({ label, file, onChange, optional }) {
         <div className="drop-zone-placeholder">
           <Upload size={22} />
           <span>{label}{optional ? ' (Opsional)' : ''}</span>
-          <small>Klik untuk pilih file</small>
+          <small>Klik untuk pilih file tunggal</small>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Dp3DropZone({ files, onChange }) {
+  const fileInputRef = useRef(null)
+  const folderInputRef = useRef(null)
+
+  const handleAddFiles = (newFiles) => {
+    if (!newFiles || newFiles.length === 0) return
+    const fileArray = Array.from(newFiles)
+    onChange(prev => {
+      const existingKeys = new Set(prev.map(f => `${f.name}-${f.size}`))
+      const uniqueNew = fileArray.filter(f => !existingKeys.has(`${f.name}-${f.size}`))
+      return [...prev, ...uniqueNew]
+    })
+  }
+
+  const handleRemoveFile = (indexToRemove) => {
+    onChange(prev => prev.filter((_, idx) => idx !== indexToRemove))
+  }
+
+  const handleClearAll = () => {
+    onChange([])
+  }
+
+  return (
+    <div className="dp3-drop-zone">
+      <div className="dp3-drop-header">
+        <label className="field-label" style={{ marginBottom: 0 }}>
+          3. Dokumen Pendukung (DP3) Lainnya (Opsional)
+        </label>
+        {files.length > 0 && (
+          <button type="button" className="dp3-clear-btn" onClick={handleClearAll}>
+            Hapus Semua ({files.length})
+          </button>
+        )}
+      </div>
+
+      <div
+        className="drop-zone dp3-box"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault()
+          if (e.dataTransfer.files) {
+            handleAddFiles(e.dataTransfer.files)
+          }
+        }}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          style={{ display: 'none' }}
+          accept=".pdf,.docx,.xlsx,.xls,.txt,.zip"
+          multiple
+          onChange={(e) => {
+            handleAddFiles(e.target.files)
+            e.target.value = ''
+          }}
+        />
+        <input
+          ref={folderInputRef}
+          type="file"
+          style={{ display: 'none' }}
+          webkitdirectory=""
+          directory=""
+          multiple
+          onChange={(e) => {
+            handleAddFiles(e.target.files)
+            e.target.value = ''
+          }}
+        />
+
+        <div className="dp3-box-content">
+          <FolderPlus size={28} className="dp3-box-icon" />
+          <span className="dp3-box-title">Unggah Folder atau Beberapa File DP3</span>
+          <small className="dp3-box-desc">
+            Mendukung PDF, Word (DOCX), Excel (XLSX/XLS), TXT, arsip ZIP, atau pilih Folder langsung
+          </small>
+          <div className="dp3-action-buttons">
+            <button
+              type="button"
+              className="dp3-pick-btn"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Upload size={14} /> Pilih File / ZIP
+            </button>
+            <button
+              type="button"
+              className="dp3-pick-btn secondary"
+              onClick={() => folderInputRef.current?.click()}
+            >
+              <FolderOpen size={14} /> Pilih Folder DP3
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {files.length > 0 && (
+        <div className="dp3-selected-list">
+          <div className="dp3-selected-title">
+            <span>{files.length} dokumen DP3 dipilih untuk dianalisis AI:</span>
+          </div>
+          <div className="dp3-chips">
+            {files.map((f, i) => (
+              <span key={`${f.name}-${i}`} className="dp3-chip" title={f.name}>
+                <FileText size={13} className="dp3-chip-icon" />
+                <span className="dp3-chip-name">{f.name}</span>
+                <span className="dp3-chip-size">({(f.size / 1024).toFixed(0)} KB)</span>
+                <button
+                  type="button"
+                  className="dp3-chip-remove"
+                  onClick={() => handleRemoveFile(i)}
+                  title="Hapus file ini"
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            ))}
+          </div>
         </div>
       )}
     </div>

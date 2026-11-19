@@ -6,7 +6,9 @@
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  transition: width var(--transition), min-width var(--transition);
+  transition:
+    width var(--transition),
+    min-width var(--transition);
   overflow: hidden;
   position: relative;
 }
@@ -33,7 +35,23 @@
 }
 
 .brand-logo {
-  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.brand-logo-img,
+.brand-logo img {
+  height: 24px;
+  width: auto;
+  max-width: 105px;
+  object-fit: contain;
+  display: block;
+  background: #ffffff;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .brand-name {
@@ -52,7 +70,9 @@
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
-  transition: background var(--transition), color var(--transition);
+  transition:
+    background var(--transition),
+    color var(--transition);
   flex-shrink: 0;
 }
 .collapse-btn:hover {
@@ -73,7 +93,9 @@
   color: white;
   font-size: 13px;
   font-weight: 500;
-  transition: background var(--transition), transform var(--transition);
+  transition:
+    background var(--transition),
+    transform var(--transition);
   white-space: nowrap;
   overflow: hidden;
 }
@@ -116,7 +138,9 @@
   font-size: 13px;
   font-weight: 400;
   background: transparent;
-  transition: background var(--transition), color var(--transition);
+  transition:
+    background var(--transition),
+    color var(--transition);
   white-space: nowrap;
   overflow: hidden;
 }
@@ -160,7 +184,9 @@
   cursor: pointer;
   color: var(--text-secondary);
   font-size: 12.5px;
-  transition: background var(--transition), color var(--transition);
+  transition:
+    background var(--transition),
+    color var(--transition);
   position: relative;
 }
 .thread-item:hover {
@@ -204,10 +230,12 @@
   border-radius: 4px;
   background: transparent;
   color: var(--text-muted);
-  transition: background var(--transition), color var(--transition);
+  transition:
+    background var(--transition),
+    color var(--transition);
 }
 .thread-action-btn:hover {
-  background: rgba(255,255,255,0.1);
+  background: rgba(255, 255, 255, 0.1);
   color: var(--text-primary);
 }
 .thread-action-btn.danger:hover {
