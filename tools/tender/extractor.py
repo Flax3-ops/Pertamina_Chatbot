@@ -10,7 +10,7 @@ import re
 import os
 import csv
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Union
+from typing import Dict, Any, List, Optional, Union, Tuple
 
 import docx
 import pymupdf
@@ -265,3 +265,161 @@ def extract_boq_info(file_input: Union[str, Path, bytes, io.BytesIO], filename: 
     result["summary"] = (f"BOQ: {filename}. {len(result['items'])} item terbaca; "
                          f"nilai yang tidak ditemukan tidak dihitung otomatis.")
     return result
+
+
+def extract_dp3_info(files: List[Tuple[str, bytes]]) -> Dict[str, Any]:
+    """
+    Extracts text and key procurement points from DP3 (Dokumen Pendukung Pemilihan Pengadaan) files.
+    Supports PDF (.pdf), DOCX (.docx), Excel (.xlsx, .xls), Text (.txt), and ZIP archive (.zip).
+    """
+    if not files:
+        return {
+            "files_processed": [],
+            "files_skipped": [],
+            "dp3_summary": "",
+            "dp3_file_summaries": [],
+        }
+
+    expanded_files: List[Tuple[str, bytes]] = []
+    skipped_files: List[Dict[str, str]] = []
+
+    for fname, data in files:
+        clean_name = os.path.basename(fname).strip()
+        if not clean_name or not data:
+            continue
+        ext = Path(clean_name).suffix.lower()
+        if ext == ".zip":
+            try:
+                import zipfile
+                with zipfile.ZipFile(io.BytesIO(data)) as zf:
+                    for zinfo in zf.infolist():
+                        if zinfo.is_dir() or "__MACOSX" in zinfo.filename or zinfo.filename.startswith("."):
+                            continue
+                        sub_name = os.path.basename(zinfo.filename)
+                        if not sub_name or sub_name.startswith("."):
+                            continue
+                        sub_ext = Path(sub_name).suffix.lower()
+                        if sub_ext in {".pdf", ".docx", ".xlsx", ".xls", ".txt"}:
+                            expanded_files.append((sub_name, zf.read(zinfo)))
+                        else:
+                            skipped_files.append({
+                                "filename": sub_name,
+                                "reason": f"Format {sub_ext or 'tanpa ekstensi'} tidak didukung dalam ZIP",
+                            })
+            except Exception as e:
+                skipped_files.append({"filename": clean_name, "reason": f"Gagal membaca file ZIP: {e}"})
+        elif ext in {".pdf", ".docx", ".xlsx", ".xls", ".txt"}:
+            expanded_files.append((clean_name, data))
+        else:
+            skipped_files.append({
+                "filename": clean_name,
+                "reason": f"Format {ext or 'tanpa ekstensi'} tidak didukung (didukung: PDF, DOCX, XLSX, XLS, TXT, ZIP)",
+            })
+
+    processed_files: List[Dict[str, Any]] = []
+    file_summaries: List[Dict[str, Any]] = []
+    corpus_parts: List[str] = []
+
+    for fname, raw in expanded_files:
+        ext = Path(fname).suffix.lower()
+        extracted_text = ""
+        try:
+            if ext == ".pdf":
+                with pymupdf.open(stream=raw, filetype="pdf") as pdf:
+                    pages_text = [p.get_text() for p in pdf if p.get_text()]
+                    extracted_text = "\n".join(pages_text)
+            elif ext == ".docx":
+                doc = docx.Document(io.BytesIO(raw))
+                para_text = [p.text for p in doc.paragraphs if p.text.strip()]
+                tbl_text = [c.text.strip() for t in doc.tables for row in t.rows for c in row.cells if c.text.strip()]
+                extracted_text = "\n".join(para_text + tbl_text)
+            elif ext in {".xlsx", ".xls"}:
+                import pandas as pd
+                sheets = pd.read_excel(io.BytesIO(raw), sheet_name=None, header=None, dtype=object)
+                s_lines = []
+                for sname, df in sheets.items():
+                    s_lines.append(f"[Sheet {sname}]")
+                    for row in df.head(40).where(pd.notna(df), "").values.tolist():
+                        line = " | ".join([str(c) for c in row if str(c).strip()])
+                        if line:
+                            s_lines.append(line)
+                extracted_text = "\n".join(s_lines)
+            elif ext == ".txt":
+                extracted_text = raw.decode("utf-8", errors="replace")
+        except Exception as exc:
+            skipped_files.append({"filename": fname, "reason": f"Gagal membaca teks: {exc}"})
+            continue
+
+        clean_text = re.sub(r"\s+", " ", extracted_text).strip()
+        if not clean_text:
+            skipped_files.append({"filename": fname, "reason": "Dokumen tidak memiliki teks terbaca (kemungkinan scan/gambar murni)"})
+            continue
+
+        # Truncate text per document to keep context manageable
+        truncated_text = clean_text[:6000]
+        processed_files.append({
+            "filename": fname,
+            "size_kb": round(len(raw) / 1024, 1),
+            "snippet": clean_text[:200] + "..." if len(clean_text) > 200 else clean_text,
+        })
+        corpus_parts.append(f"--- DOKUMEN DP3: {fname} ---\n{truncated_text}")
+
+    if not processed_files:
+        return {
+            "files_processed": [],
+            "files_skipped": skipped_files,
+            "dp3_summary": "",
+            "dp3_file_summaries": [],
+        }
+
+    # Summarize with LLM (with heuristic fallback)
+    combined_dp3_text = "\n\n".join(corpus_parts)
+    dp3_summary = ""
+
+    try:
+        from langchain_openrouter import ChatOpenRouter
+        from langchain_core.messages import SystemMessage
+
+        llm = ChatOpenRouter(model="qwen/qwen3.7-flash", temperature=0)
+        system_prompt = (
+            "Kamu adalah Legal & Procurement Specialist PT Pertamina Patra Niaga.\n"
+            "Berikut adalah kumpulan Dokumen Pendukung Pemilihan Pengadaan (DP3) pelengkap RKS dan BOQ.\n"
+            "Ekstrak dan rangkum HANYA informasi penting yang krusial untuk Dokumen Tender:\n"
+            "1. Ruang Lingkup Khusus & Spesifikasi Teknis Utama\n"
+            "2. Kriteria/Persyaratan Kualifikasi Penyedia (Izin, Sertifikasi, Personil Inti, Peralatan)\n"
+            "3. Ketentuan Mutu, Standar K3LL / HSSE / CSMS, atau Lingkungan\n"
+            "4. Jadwal, Batas Waktu, Garansi, atau Lokasi Pekerjaan Khusus\n\n"
+            f"Dokumen DP3:\n{combined_dp3_text[:14000]}\n\n"
+            "Format jawaban dalam poin-poin terstruktur yang padat, akurat, dan langsung dapat digunakan sebagai konteks Dokumen Tender."
+        )
+        resp = llm.invoke([SystemMessage(content=system_prompt)])
+        dp3_summary = resp.content.strip() if hasattr(resp, "content") else str(resp).strip()
+    except Exception:
+        # Fallback heuristic: find sentences with key procurement terms
+        key_matches = []
+        for line in combined_dp3_text.splitlines():
+            if re.search(r"\b(lingkup|spesifikasi|kualifikasi|syarat|jadwal|lokasi|csms|hsse|peralatan|personil|garansi|izin|sertifikat)\b", line, re.I):
+                clean_l = line.strip()
+                if len(clean_l) > 20:
+                    key_matches.append(f"- {clean_l[:150]}")
+            if len(key_matches) >= 10:
+                break
+        dp3_summary = (
+            "Ringkasan Poin Penting Dokumen DP3:\n" +
+            ("\n".join(key_matches) if key_matches else f"Terbaca {len(processed_files)} dokumen DP3: " + ", ".join([f['filename'] for f in processed_files]))
+        )
+
+    # Per file brief summary for the <details> accordion
+    for pf in processed_files:
+        file_summaries.append({
+            "filename": pf["filename"],
+            "size_kb": pf["size_kb"],
+            "snippet": pf["snippet"],
+        })
+
+    return {
+        "files_processed": processed_files,
+        "files_skipped": skipped_files,
+        "dp3_summary": dp3_summary,
+        "dp3_file_summaries": file_summaries,
+    }

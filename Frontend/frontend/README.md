@@ -157,8 +157,8 @@ Terletak di dalam `src/components/chat/ChatMessage.jsx`:
 
 - **`src/pages/TenderPage.jsx` (Generate Dokumen Tender)**:
   - Mengadopsi alur **3-Step Wizard**:
-    1. **Langkah 1 (Upload Dokumen)**: Pengguna mengunggah berkas RKS (PDF/Word) dan BOQ (Excel/PDF). Sistem memanggil `POST /api/tender/extract-context` untuk mengekstraksi judul proyek, risiko CSMS, nilai HPS, dan rincian BOQ.
-    2. **Langkah 2 (Form Pengisian)**: Seluruh formulir terisi secara otomatis dari data ekstraksi, mencakup Nama Pengadaan, Nomor Tender, Tanggal, CSMS, HPS Prime Cost, Total HPS dengan Keuntungan Rekanan, Nilai Minimal TKDN, Pejabat Terkait, dan Jadwal Aanwijzing / Pre-Bid. Pengguna dapat meninjau dan mengubah data bila diperlukan.
+    1. **Langkah 1 (Upload Dokumen)**: Pengguna mengunggah berkas RKS (PDF/Word), BOQ (Excel/PDF), dan Dokumen Pendukung Pemilihan Pengadaan (DP3) lainnya (bisa berupa folder, kumpulan berkas PDF/DOCX/Excel/TXT, atau arsip ZIP). Sistem memanggil `POST /api/tender/extract-context` untuk mengekstraksi judul proyek, risiko CSMS, nilai HPS, rincian BOQ, serta poin penting DP3 secara otomatis melalui AI.
+    2. **Langkah 2 (Form Pengisian & Review DP3)**: Seluruh formulir terisi otomatis. Konteks DP3 yang diekstrak AI ditampilkan dalam kartu interaktif collapsible `<details>` dengan daftar berkas terproses, pemberitahuan berkas yang dilewati, ringkasan poin teknis/kualifikasi yang dapat diedit, serta tombol untuk menghapus/menonaktifkan konteks DP3.
     3. **Langkah 3 (Unduh Dokumen)**: Menampilkan status keberhasilan pembuatan dokumen, nama berkas yang dihasilkan, dan tombol langsung untuk mengunduh berkas Microsoft Word (`.docx`).
 - **`src/pages/RKSPage.jsx` (Generate Dokumen RKS)**:
   - Form pembuatan draf Rencana Kerja & Syarat-Syarat berdasarkan deskripsi kebutuhan pengadaan dari pengguna.

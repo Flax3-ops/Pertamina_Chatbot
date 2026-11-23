@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import React, { useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   MessageSquare,
   FileText,
@@ -13,15 +13,20 @@ import {
   AlertCircle,
   Pencil,
   Database,
-} from 'lucide-react'
-import './Sidebar.css'
+} from "lucide-react";
+import pertaminaLogo from "../../assets/logo_pertamina.png";
+import "./Sidebar.css";
 
 const NAV_ITEMS = [
-  { path: '/generate-rks', label: 'Generate RKS', icon: FileText },
-  { path: '/generate-tender', label: 'Generate Tender', icon: ClipboardList },
-  { path: '/generate-amandemen', label: 'Generate Amandemen', icon: FilePen },
-  { path: '/knowledge-base', label: 'Knowledge Base', icon: Database },
-]
+  { path: "/generate-rks", label: "Generate RKS", icon: FileText },
+  {
+    path: "/generate-tender",
+    label: "Generate Tender dan Rancangan Kontrak",
+    icon: ClipboardList,
+  },
+  { path: "/generate-amandemen", label: "Generate Amandemen", icon: FilePen },
+  { path: "/knowledge-base", label: "Knowledge Base", icon: Database },
+];
 
 export default function Sidebar({
   threads,
@@ -35,42 +40,52 @@ export default function Sidebar({
   collapsed,
   onToggleCollapse,
 }) {
-  const navigate = useNavigate()
-  const location = useLocation()
-  const [renamingId, setRenamingId] = useState(null)
-  const [renameValue, setRenameValue] = useState('')
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [renamingId, setRenamingId] = useState(null);
+  const [renameValue, setRenameValue] = useState("");
 
   const handleNewChatClick = (e) => {
-    e.preventDefault()
-    onNewChat()
-    navigate('/')
-  }
+    e.preventDefault();
+    onNewChat();
+    navigate("/");
+  };
 
   const startRename = (thread, e) => {
-    e.stopPropagation()
-    setRenamingId(thread.id)
-    setRenameValue(thread.title)
-  }
+    e.stopPropagation();
+    setRenamingId(thread.id);
+    setRenameValue(thread.title);
+  };
 
   const submitRename = (id) => {
-    if (renameValue.trim()) onRenameThread(id, renameValue.trim())
-    setRenamingId(null)
-  }
+    if (renameValue.trim()) onRenameThread(id, renameValue.trim());
+    setRenamingId(null);
+  };
 
   return (
-    <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
+    <aside className={`sidebar ${collapsed ? "collapsed" : ""}`}>
       {/* Header */}
       <div className="sidebar-header">
         {!collapsed && (
-          <div className="sidebar-brand" onClick={() => navigate('/')} style={{ cursor: 'pointer' }}>
-            <span className="brand-logo">⚡</span>
-            <span className="brand-name">Pertamina AI</span>
+          <div
+            className="sidebar-brand"
+            onClick={() => navigate("/")}
+            style={{ cursor: "pointer" }}
+          >
+            <span className="brand-logo">
+              <img
+                src={pertaminaLogo}
+                alt="Logo Pertamina"
+                className="brand-logo-img"
+              />
+            </span>
+            <span className="brand-name">ITeC</span>
           </div>
         )}
         <button
           className="collapse-btn"
           onClick={onToggleCollapse}
-          title={collapsed ? 'Buka sidebar' : 'Tutup sidebar'}
+          title={collapsed ? "Buka sidebar" : "Tutup sidebar"}
         >
           {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
         </button>
@@ -78,7 +93,7 @@ export default function Sidebar({
 
       {/* New Chat */}
       <button
-        className={`new-chat-btn ${collapsed ? 'icon-only' : ''}`}
+        className={`new-chat-btn ${collapsed ? "icon-only" : ""}`}
         onClick={handleNewChatClick}
         title="Percakapan Baru"
       >
@@ -92,7 +107,7 @@ export default function Sidebar({
         {NAV_ITEMS.map(({ path, label, icon: Icon }) => (
           <button
             key={path}
-            className={`nav-item ${location.pathname === path ? 'active' : ''} ${collapsed ? 'icon-only' : ''}`}
+            className={`nav-item ${location.pathname === path ? "active" : ""} ${collapsed ? "icon-only" : ""}`}
             onClick={() => navigate(path)}
             title={collapsed ? label : undefined}
           >
@@ -122,25 +137,28 @@ export default function Sidebar({
           )}
 
           <div className="thread-list">
-            {threads.map(thread => (
+            {threads.map((thread) => (
               <div
                 key={thread.id}
-                className={`thread-item ${thread.id === activeThreadId ? 'active' : ''}`}
-                onClick={() => { onSelectThread(thread.id); navigate('/') }}
+                className={`thread-item ${thread.id === activeThreadId ? "active" : ""}`}
+                onClick={() => {
+                  onSelectThread(thread.id);
+                  navigate("/");
+                }}
               >
                 <MessageSquare size={13} className="thread-icon" />
                 {renamingId === thread.id ? (
                   <input
                     className="rename-input"
                     value={renameValue}
-                    onChange={e => setRenameValue(e.target.value)}
+                    onChange={(e) => setRenameValue(e.target.value)}
                     onBlur={() => submitRename(thread.id)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') submitRename(thread.id)
-                      if (e.key === 'Escape') setRenamingId(null)
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") submitRename(thread.id);
+                      if (e.key === "Escape") setRenamingId(null);
                     }}
                     autoFocus
-                    onClick={e => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
                   />
                 ) : (
                   <span className="thread-title">{thread.title}</span>
@@ -148,14 +166,21 @@ export default function Sidebar({
                 <div className="thread-actions">
                   <button
                     className="thread-action-btn"
-                    onClick={e => startRename(thread, e)}
+                    onClick={(e) => startRename(thread, e)}
                     title="Rename"
-                  ><Pencil size={11} /></button>
+                  >
+                    <Pencil size={11} />
+                  </button>
                   <button
                     className="thread-action-btn danger"
-                    onClick={e => { e.stopPropagation(); onDeleteThread(thread.id) }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteThread(thread.id);
+                    }}
                     title="Hapus"
-                  ><Trash2 size={11} /></button>
+                  >
+                    <Trash2 size={11} />
+                  </button>
                 </div>
               </div>
             ))}
@@ -167,5 +192,5 @@ export default function Sidebar({
         </div>
       )}
     </aside>
-  )
+  );
 }

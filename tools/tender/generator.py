@@ -92,13 +92,13 @@ Tugas kamu adalah menyusun dynamic data untuk Dokumen Tender berdasarkan paramet
 - Jadwal Pre-Bid Meeting       : {prebid_tgl} ({prebid_waktu}) di {prebid_tempat}
 - Jadwal Pemasukan Penawaran   : {pemasukan_mulai} s.d. {pemasukan_selesai}
 
-Konteks Tambahan (RKS / BOQ):
+Konteks Tambahan (RKS / BOQ / Dokumen Pendukung DP3):
 {context_summary}
 
 Fokus Tugas Khusus LLM:
 1. Tentukan Kode Bidang Usaha Pertamina (KBUP) dan KBLI yang relevan dan presisi untuk pekerjaan ini.
-2. Buat rincian Lampiran 2A (Syarat dan Kriteria Evaluasi Teknis) yang spesifik untuk jenis pekerjaan ini (minimal 4 kriteria dengan dokumen pembuktian, parameter evaluasi terukur, dan bobot yang berjumlah 100).
-3. Rincikan lingkup pekerjaan (scope of work) untuk Pasal 2 Bagian B (Rancangan Kontrak).
+2. Buat rincian Lampiran 2A (Syarat dan Kriteria Evaluasi Teknis) yang spesifik untuk jenis pekerjaan ini (minimal 4 kriteria dengan dokumen pembuktian, parameter evaluasi terukur, dan bobot yang berjumlah 100), integrasikan syarat teknis, kualifikasi vendor, personil, peralatan, atau standar HSSE/CSMS dari dokumen pendukung (DP3) jika tersedia.
+3. Rincikan lingkup pekerjaan (scope of work) untuk Pasal 2 Bagian B (Rancangan Kontrak) mencakup spesifikasi teknis dari RKS dan dokumen pendukung (DP3).
 
 Output HARUS berupa JSON valid persis sesuai dengan schema berikut:
 {DOKUMEN_TENDER_JSON_SCHEMA}
