@@ -15,8 +15,8 @@ Browser ──► Frontend React (Vercel) ──► Backend FastAPI (Hugging Fac
 | Komponen | Layanan | Status | URL | Catatan |
 |---|---|---|---|---|
 | Database | Supabase | ☑ sudah ada & terisi | | Tinggal verifikasi (Tahap 1) |
-| Backend | **Azure Container Apps** (Azure for Students) | ☐ | | HF Spaces batal: Docker Space butuh PRO |
-| Frontend | Vercel | ☐ | | |
+| Backend | **Azure Container Apps** (Azure for Students, `indonesiacentral`) | ☑ live 2026-11-24 | https://pertamina-backend.grayriver-e4c2bf23.indonesiacentral.azurecontainerapps.io | Image `ghcr.io/flax3-ops/pertamina-backend:latest` |
+| Frontend | Vercel (project `pertamina-chatbot`, akun `furqonfikri97-1863`) | ☑ live 2026-11-24 | https://pertamina-chatbot.vercel.app | Deploy via CLI dari `Frontend/frontend` |
 | Streamlit | Streamlit Community Cloud | ☑ sudah jalan | https://pertaminachatbot-enawev7dvaq8t6sj79yrba.streamlit.app | Lihat Tahap 6 |
 
 > Syarat dan batas free tier tiap layanan bisa berubah. Cek ulang di situs resmi sebelum mulai.
@@ -262,8 +262,35 @@ Gunakan bila HF Spaces tidak cocok. Butuh kartu untuk verifikasi, instance scale
 - Fork: https://github.com/Flax3-ops/Pertamina_Chatbot, branch `deploy-azure`
 - Workflow: `.github/workflows/build-backend.yml` → push ke `ghcr.io/flax3-ops/pertamina-backend:latest`
 - Konteks build memakai `deploy/hf-space/Dockerfile.dockerignore` (folder `data/` ikut masuk image)
-- [ ] Aktifkan Actions di fork (tab **Actions** → *I understand my workflows, go ahead and enable them*)
-- [ ] Workflow sukses (tab Actions)
-- [ ] Ubah visibility package `pertamina-backend` ke **Public** (profil GitHub → Packages → Package settings), agar Azure bisa pull tanpa kredensial
-- [ ] `scripts/deploy_azure.py --image ghcr.io/flax3-ops/pertamina-backend:latest`
-- [ ] Hapus ACR `eastasia` yang tidak terpakai agar kredit tidak terpotong
+- [x] Aktifkan Actions di fork (tab **Actions** → *I understand my workflows, go ahead and enable them*)
+- [x] Workflow sukses (tab Actions)
+- [x] Ubah visibility package `pertamina-backend` ke **Public** (profil GitHub → Packages → Package settings), agar Azure bisa pull tanpa kredensial
+- [x] `scripts/deploy_azure.py --image ghcr.io/flax3-ops/pertamina-backend:latest`
+- [x] Hapus ACR `eastasia` yang tidak terpakai agar kredit tidak terpotong
+
+---
+
+## Hasil verifikasi (2026-11-24)
+
+| Uji | Hasil |
+|---|---|
+| `GET /api/health` | 200 `healthy` (±1 dtk saat hangat) |
+| CORS preflight dari `https://pertamina-chatbot.vercel.app` | 200, `Access-Control-Allow-Origin` sesuai |
+| CORS dari origin lain | 400 (ditolak, sesuai harapan) |
+| Chat end-to-end (`POST /api/chat`) | 200, jawaban LLM ±16 dtk |
+| Supabase (`GET /api/chat/threads`) | Terhubung, thread terbaca |
+| Sumber RKS dari `data/` di image (`/api/rks/sources?query=tangki`) | 5 sumber ditemukan |
+| Frontend memuat URL backend | `VITE_API_URL` tertanam di bundle JS |
+
+## Cara update setelah ada perubahan kode
+
+1. Backend: push ke branch `deploy-azure` di fork → GitHub Actions build image baru → lalu
+   `.venv/Scripts/python.exe scripts/deploy_azure.py --image ghcr.io/flax3-ops/pertamina-backend:latest --cors https://pertamina-chatbot.vercel.app`
+   (selalu sertakan `--image`; tanpa itu script akan membuat ulang ACR yang berbayar).
+2. Frontend: dari `Frontend/frontend` jalankan `npx vercel deploy --prod --yes`.
+
+## Resource Azure yang aktif (`pertamina-chatbot-rg`)
+
+- Container App `pertamina-backend` (1 vCPU, 2 GiB, min replica 0 → cold start 1–3 menit setelah idle)
+- Container Apps environment `pertamina-env`
+- Log Analytics workspace (biaya kecil dari kredit)
