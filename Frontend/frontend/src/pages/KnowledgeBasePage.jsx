@@ -12,6 +12,8 @@ import {
   Clock,
   Layers,
   Unlink,
+  Link2,
+  Loader2,
 } from 'lucide-react'
 import { gdriveService } from '../services/api'
 import './FormPage.css'
@@ -24,6 +26,10 @@ export default function KnowledgeBasePage() {
   const [loading, setLoading] = useState(true)
   const [savingConfig, setSavingConfig] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const [connecting, setConnecting] = useState(false)
+  const [showTokenInput, setShowTokenInput] = useState(false)
+  const [tokenJsonInput, setTokenJsonInput] = useState('')
+  const [savingToken, setSavingToken] = useState(false)
   const [syncResult, setSyncResult] = useState(null)
   const [errorMsg, setErrorMsg] = useState(null)
   const [successMsg, setSuccessMsg] = useState(null)
@@ -69,6 +75,10 @@ export default function KnowledgeBasePage() {
   }
 
   const handleRunSync = async () => {
+    if (!status?.is_authenticated) {
+      setErrorMsg('Akun Google Drive belum terhubung atau token kadaluarsa. Silakan klik tombol "Hubungkan Akun Google" terlebih dahulu.')
+      return
+    }
     setSyncing(true)
     setErrorMsg(null)
     setSuccessMsg(null)
@@ -83,6 +93,39 @@ export default function KnowledgeBasePage() {
       setErrorMsg(err.response?.data?.detail || err.message || 'Sinkronisasi gagal.')
     } finally {
       setSyncing(false)
+    }
+  }
+
+  const handleConnect = async () => {
+    setConnecting(true)
+    setErrorMsg(null)
+    setSuccessMsg(null)
+    try {
+      const res = await gdriveService.connect()
+      setSuccessMsg(res.message || 'Akun Google Drive berhasil terhubung!')
+      await loadData()
+    } catch (err) {
+      setErrorMsg(err.response?.data?.detail || err.message || 'Gagal menghubungkan akun Google.')
+    } finally {
+      setConnecting(false)
+    }
+  }
+
+  const handleSaveToken = async () => {
+    if (!tokenJsonInput.trim()) return
+    setSavingToken(true)
+    setErrorMsg(null)
+    setSuccessMsg(null)
+    try {
+      const res = await gdriveService.saveToken({ token_json: tokenJsonInput.trim() })
+      setSuccessMsg(res.message || 'Token berhasil disimpan!')
+      setTokenJsonInput('')
+      setShowTokenInput(false)
+      await loadData()
+    } catch (err) {
+      setErrorMsg(err.response?.data?.detail || err.message || 'Gagal menyimpan token.')
+    } finally {
+      setSavingToken(false)
     }
   }
 
@@ -158,29 +201,126 @@ export default function KnowledgeBasePage() {
             </p>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             {status?.is_authenticated ? (
-              <span className="kb-status-badge connected">
-                <CheckCircle2 size={14} /> Terhubung: {status.email || 'Akun Google'}
-              </span>
+              <>
+                <span className="kb-status-badge connected">
+                  <CheckCircle2 size={14} /> Terhubung: {status.email || 'Akun Google'}
+                </span>
+                <button
+                  className="action-btn"
+                  style={{ padding: '6px 12px', fontSize: 12, background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)' }}
+                  onClick={handleDisconnect}
+                  title="Putuskan akun Google"
+                >
+                  <Unlink size={13} style={{ marginRight: 4 }} /> Putuskan
+                </button>
+              </>
             ) : (
-              <span className="kb-status-badge disconnected">
-                <AlertCircle size={14} /> Belum Terhubung
-              </span>
-            )}
-
-            {status?.is_authenticated && (
-              <button
-                className="action-btn"
-                style={{ padding: '6px 12px', fontSize: 12, background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)' }}
-                onClick={handleDisconnect}
-                title="Putuskan akun Google"
-              >
-                <Unlink size={13} style={{ marginRight: 4 }} /> Putuskan
-              </button>
+              <>
+                <span className="kb-status-badge disconnected">
+                  <AlertCircle size={14} /> Belum Terhubung
+                </span>
+                <button
+                  className="action-btn"
+                  style={{
+                    padding: '7px 16px',
+                    fontSize: 12.5,
+                    fontWeight: 500,
+                    background: 'var(--accent-blue)',
+                    color: '#ffffff',
+                    border: 'none',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                  onClick={handleConnect}
+                  disabled={connecting}
+                  title="Buka browser untuk otorisasi akun Google Drive"
+                >
+                  {connecting ? (
+                    <>
+                      <Loader2 size={13} className="spin" /> Menghubungkan…
+                    </>
+                  ) : (
+                    <>
+                      <Link2 size={13} /> Hubungkan Akun Google
+                    </>
+                  )}
+                </button>
+              </>
             )}
           </div>
         </div>
+
+        {/* Notice when disconnected / expired */}
+        {!status?.is_authenticated && (
+          <div style={{
+            marginTop: 10,
+            padding: '12px 16px',
+            background: 'rgba(239, 68, 68, 0.08)',
+            border: '1px solid rgba(239, 68, 68, 0.25)',
+            borderRadius: 'var(--radius-md)',
+            fontSize: 12.5,
+            color: '#f87171',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 6,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+              <AlertCircle size={15} />
+              <span>{status?.error ? 'Sesi Google Telah Kadaluarsa / Akses Dicabut' : 'Otorisasi Google Drive Diperlukan'}</span>
+            </div>
+            <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>
+              {status?.error || 'Aplikasi membutuhkan izin akses baca untuk folder Google Drive Anda agar dapat menyinkronkan dokumen ke Knowledge Base.'}
+            </span>
+            <span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>
+              👉 Klik tombol <strong>"Hubungkan Akun Google"</strong> di atas. Browser Anda akan terbuka otomatis untuk konfirmasi akun Google dan menyetujui izin akses Google Drive.
+            </span>
+
+            {/* Manual token paste toggle */}
+            <div style={{ marginTop: 6, borderTop: '1px solid rgba(239, 68, 68, 0.15)', paddingTop: 6 }}>
+              <button
+                type="button"
+                onClick={() => setShowTokenInput(prev => !prev)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--accent-blue-light)',
+                  fontSize: 11.5,
+                  cursor: 'pointer',
+                  padding: 0,
+                  textDecoration: 'underline',
+                }}
+              >
+                {showTokenInput ? '▲ Sembunyikan Opsi Tempel Token Manual' : '▼ Opsi Lanjutan: Tempelkan token.json manual (Untuk server tanpa GUI)'}
+              </button>
+              {showTokenInput && (
+                <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <textarea
+                    className="field-input field-textarea"
+                    rows={4}
+                    placeholder='Tempelkan isi file token.json di sini ({"token": "ya29...", "refresh_token": "...", ...})'
+                    value={tokenJsonInput}
+                    onChange={(e) => setTokenJsonInput(e.target.value)}
+                    style={{ fontFamily: 'monospace', fontSize: 11 }}
+                  />
+                  <div>
+                    <button
+                      type="button"
+                      className="action-btn"
+                      onClick={handleSaveToken}
+                      disabled={savingToken || !tokenJsonInput.trim()}
+                      style={{ fontSize: 12, padding: '5px 14px' }}
+                    >
+                      {savingToken ? <><Loader2 size={12} className="spin" style={{ marginRight: 4 }} /> Menyimpan…</> : <><Save size={12} style={{ marginRight: 4 }} /> Simpan Token</>}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Sync Controls */}
         <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 14 }}>

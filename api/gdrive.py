@@ -6,9 +6,15 @@ trigger delta sync to PostgreSQL, and list synced files.
 
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, HTTPException
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
-from tools.gdrive.auth import get_auth_status, disconnect_google_drive
+from tools.gdrive.auth import (
+    get_auth_status,
+    disconnect_google_drive,
+    authenticate_google_drive,
+    save_token_data,
+)
 from tools.gdrive.sync import (
     load_gdrive_config,
     save_gdrive_config,
@@ -22,6 +28,10 @@ router = APIRouter(prefix="/api/gdrive", tags=["Google Drive Knowledge Base"])
 
 class GDriveConfigPayload(BaseModel):
     folder_id: str = Field(min_length=1, description="Google Drive Folder ID or URL")
+
+
+class GDriveTokenPayload(BaseModel):
+    token_json: str = Field(min_length=1, description="Raw JSON content of token.json")
 
 
 class GDriveSyncPayload(BaseModel):
@@ -145,5 +155,51 @@ def disconnect():
     try:
         disconnect_google_drive()
         return {"status": "success", "message": "Akun Google Drive berhasil diputuskan."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/connect")
+async def connect_google_drive():
+    """
+    Triggers interactive Google OAuth 2.0 flow.
+    Runs local server and opens browser for user to log in and grant Google Drive permissions.
+    """
+    try:
+        await run_in_threadpool(authenticate_google_drive, port=0)
+        auth_info = get_auth_status()
+        if not auth_info.get("is_authenticated"):
+            raise HTTPException(
+                status_code=400,
+                detail=auth_info.get("error") or "Gagal menyelesaikan otorisasi Google Drive.",
+            )
+        return {
+            "status": "success",
+            "message": f"Akun Google Drive ({auth_info.get('email') or 'Terhubung'}) berhasil dihubungkan!",
+            "email": auth_info.get("email"),
+            "is_authenticated": True,
+        }
+    except Exception as e:
+        detail_msg = str(e)
+        if "Timeout" in detail_msg or "timeout" in detail_msg:
+            detail_msg = "Waktu otorisasi habis (timeout). Silakan klik coba lagi."
+        raise HTTPException(status_code=500, detail=detail_msg)
+
+
+@router.post("/token")
+def upload_token(payload: GDriveTokenPayload):
+    """
+    Allows pasting token.json contents directly (useful for headless cloud server environments).
+    """
+    try:
+        auth_info = save_token_data(payload.token_json)
+        return {
+            "status": "success",
+            "message": f"Token berhasil disimpan! Terhubung sebagai: {auth_info.get('email') or 'Akun Google'}",
+            "email": auth_info.get("email"),
+            "is_authenticated": True,
+        }
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

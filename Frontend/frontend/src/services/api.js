@@ -121,6 +121,8 @@ export const rksService = {
 export const gdriveService = {
   getStatus: () => api.get('/gdrive/status').then(r => r.data),
   saveConfig: (payload) => api.post('/gdrive/config', payload).then(r => r.data),
+  connect: () => api.post('/gdrive/connect').then(r => r.data),
+  saveToken: (payload) => api.post('/gdrive/token', payload).then(r => r.data),
   sync: (payload = {}) => api.post('/gdrive/sync', payload).then(r => r.data),
   getFiles: () => api.get('/gdrive/files').then(r => r.data),
   disconnect: () => api.post('/gdrive/disconnect').then(r => r.data),

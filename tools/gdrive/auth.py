@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 import os
+import json
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Union
 
 # Allow oauthlib to proceed when scopes are adjusted by the authorization server
 os.environ["OAUTHLIB_RELAX_TOKEN_SCOPE"] = "1"
@@ -93,7 +94,14 @@ def get_auth_status() -> Dict[str, Any]:
                         token_file.write(creds.to_json())
                     is_valid = True
                 except Exception as rf_err:
-                    err_msg = f"Token kadaluarsa dan gagal diperbarui: {rf_err}"
+                    err_msg = f"Token kadaluarsa atau izin telah dicabut oleh Google: {rf_err}"
+                    # If token was revoked/invalidated by Google, remove dead token
+                    if "invalid_grant" in str(rf_err):
+                        try:
+                            TOKEN_PATH.unlink(missing_ok=True)
+                            has_token = False
+                        except Exception:
+                            pass
             # Attempt to fetch user email if valid
             if is_valid:
                 try:
@@ -179,3 +187,26 @@ def disconnect_google_drive() -> None:
     """Remove local token.json to disconnect the Google account."""
     if TOKEN_PATH.exists():
         TOKEN_PATH.unlink()
+
+
+def save_token_data(token_input: Union[str, Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Saves a raw JSON string or dictionary directly to token.json and validates it.
+    Useful for headless/cloud servers where browser OAuth cannot be launched locally.
+    """
+    if isinstance(token_input, str):
+        try:
+            data = json.loads(token_input.strip())
+        except Exception as e:
+            raise ValueError(f"Format JSON token tidak valid: {e}")
+    else:
+        data = token_input
+
+    if not isinstance(data, dict) or not ("token" in data or "refresh_token" in data):
+        raise ValueError("JSON token tidak memuat token otorisasi yang valid.")
+
+    TOKEN_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    status = get_auth_status()
+    if not status.get("is_authenticated"):
+        raise ValueError(status.get("error") or "Token tidak valid atau sudah kadaluarsa.")
+    return status
