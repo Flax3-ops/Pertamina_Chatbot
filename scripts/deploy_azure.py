@@ -36,7 +36,7 @@ EXCLUDE_TOP = {"Frontend", "frontend", "output", "tests", ".github", ".vscode"}
 SECRET_KEYS = ["DATABASE_URL", "OPENROUTER_API_KEY", "TAVILY_API_KEY", "LANGSMITH_API_KEY",
                "GDRIVE_CREDENTIALS_JSON", "GDRIVE_TOKEN_JSON"]
 PLAIN_KEYS = ["EMBEDDING_MODEL", "LLM_MODEL_NAME", "LANGSMITH_TRACING", "LANGSMITH_ENDPOINT",
-              "LANGSMITH_PROJECT", "CORS_ORIGIN_REGEX"]
+              "LANGSMITH_PROJECT", "CORS_ORIGIN_REGEX", "GDRIVE_FOLDER_ID"]
 
 # az.cmd di "C:\Program Files\..." bermasalah saat dipanggil subprocess (spasi di path),
 # jadi panggil Python bawaan Azure CLI langsung, sama seperti isi az.cmd.
