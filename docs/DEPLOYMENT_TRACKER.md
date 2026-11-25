@@ -294,3 +294,25 @@ Gunakan bila HF Spaces tidak cocok. Butuh kartu untuk verifikasi, instance scale
 - Container App `pertamina-backend` (1 vCPU, 2 GiB, min replica 0 → cold start 1–3 menit setelah idle)
 - Container Apps environment `pertamina-env`
 - Log Analytics workspace (biaya kecil dari kredit)
+
+---
+
+## Google Drive Knowledge Base di production (2026-11-25)
+
+- Akun login (token): `mahsanulfurqon8@gmail.com`, izin `drive.readonly`. Secret Azure: `GDRIVE_CREDENTIALS_JSON`, `GDRIVE_TOKEN_JSON`.
+- Folder: **Master_data_RKS** milik `nathanael.erens@gmail.com`, dibagikan ke akun di atas
+  (https://drive.google.com/drive/folders/1hUq-OOpHKnvhqowwQcLgB3A6QrNKwK9E). Default lewat env `GDRIVE_FOLDER_ID`;
+  bisa diganti dari halaman Knowledge Base (berlaku sampai container restart). Ganti permanen:
+  ubah `GDRIVE_FOLDER_ID` di `.env` lalu jalankan `scripts/deploy_azure.py --image ...`.
+- Sync pertama: 32 file di Drive → **15 dokumen baru ter-index**, 10 dokumen lama di-skip (dedup sha256),
+  Supabase sekarang **25 dokumen / 3.565 chunk, tanpa duplikat**.
+- RAG di production sudah berfungsi setelah perbaikan torch/torchvision (commit `9676b90`).
+
+| Masalah | Jumlah | Status |
+|---|---|---|
+| PDF hasil scan tanpa teks (butuh OCR) | 6 | Belum di-index. Project belum punya OCR |
+| PDF dengan encoding font rusak (`RKS-Pengadaan Tug Boat 3,000 HP.pdf`) | 1 | Ter-index tapi teks acak, tidak bisa ditemukan pencarian |
+| DOCX tanpa `numbering.xml` (`RENCANA_KERJA_DAN_SYARAT_RKS_PROYEK_KONS.docx`) | 1 | Diperbaiki (commit `8707f6a`), ter-index pada sync berikutnya setelah redeploy |
+
+Catatan: token OAuth pertama yang dipakai tidak punya izin Drive (`invalid_scope`), sehingga dibuat ulang
+dengan `prompt=consent`. Jika consent screen masih *Testing*, refresh token kedaluwarsa 7 hari.
