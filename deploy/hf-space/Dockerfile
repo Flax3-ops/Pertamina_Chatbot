@@ -22,11 +22,14 @@ RUN useradd -m -u 1000 user
 
 WORKDIR /app
 
-# torch CPU dulu agar tidak menarik paket CUDA, lalu sisa dependensi dari pyproject.toml.
+# torch + torchvision CPU dipasang BERSAMA dari index CPU agar versinya cocok. torchvision dari PyPI
+# yang tidak cocok membuat transformers/sentence_transformers gagal import ("torchvision::nms does not exist").
+# Baris python -c di akhir menggagalkan build bila import embedding rusak.
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir uv \
- && uv pip install --system --no-cache --index-url https://download.pytorch.org/whl/cpu torch \
- && uv pip install --system --no-cache -r pyproject.toml
+ && uv pip install --system --no-cache --index-url https://download.pytorch.org/whl/cpu torch torchvision \
+ && uv pip install --system --no-cache -r pyproject.toml \
+ && python -c "import torch, torchvision, sentence_transformers; print('torch', torch.__version__, 'torchvision', torchvision.__version__)"
 
 # Model embedding dimuat dengan local_files_only=True (rag/vector_store.py), jadi harus ada di image.
 # HF Spaces meneruskan Space variable EMBEDDING_MODEL sebagai build arg.
